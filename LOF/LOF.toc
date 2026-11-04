@@ -1,0 +1,66 @@
+## Interface: 16001
+## Title: LootOptimizer Forever
+## Notes: Bags full? Swap the cheapest bag item for better loot with one click. Upgrade Advisor with stat weights, also for your alts. Holdings: what all your characters own and where. Optional Auctionator prices.
+## Author: Peter
+## Version: 1.6.5
+## SavedVariables: LOF_DB
+## OptionalDeps: Auctionator
+## IconTexture: Interface\Icons\INV_Misc_Coin_02
+## X-Email: LOFCurseForge@DigitalFame.nl
+## X-License: All Rights Reserved
+## X-Curse-Project-ID: 1716046
+
+# -- Libs: LibStub, CallbackHandler, LibDataBroker, LibDBIcon -----
+# (minimap button that minimap button collectors can gather)
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
+
+# -- Core: namespace, DB, API shims, formatting, event hub ------
+Core.lua
+
+# -- Data: reference tables only (no logic) ----------------------
+Data\StatProfiles.lua
+Data\PriceRules.lua
+Data\ProfessionRanks.lua
+Data\DisenchantTable.lua
+Data\StatWeights.lua
+Data\ProfessionReagents.lua
+Data\Guide.lua
+
+# -- Resolver: ALL intelligence (value, filters, swap decision) --
+Resolver.lua
+
+# -- ResolverValue: item value, vendor or Auctionator (optional) ---
+ResolverValue.lua
+
+# -- ResolverUpgrade: Upgrade Advisor intelligence ---------------
+ResolverUpgrade.lua
+
+# -- ResolverHoldings: what each character owns, where, worth -----
+ResolverHoldings.lua
+
+# -- ResolverReagents: profession materials the character keeps --
+ResolverReagents.lua
+
+# -- Capture: events, loot baseline, swap session flow ----------
+Capture.lua
+
+# -- UI: panel, swap popup, All Items / Whitelist popups --------
+UI.lua
+
+# -- UIHoldings: the Holdings window ------------------------------
+UIHoldings.lua
+
+# -- UIAltMail: the Send to alts window --------------------------
+UIAltMail.lua
+
+# -- UIReagents: the Reagents list (Settings window) -------------
+UIReagents.lua
+
+# -- UISettings: the Settings window ------------------------------
+UISettings.lua
+
+# -- UIGuide: the Guide window (What's new / How to use) ----------
+UIGuide.lua
