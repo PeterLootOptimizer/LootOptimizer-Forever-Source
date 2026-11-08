@@ -2,7 +2,7 @@
 ## Title: LootOptimizer Forever
 ## Notes: Bags full? Swap the cheapest bag item for better loot with one click. Upgrade Advisor with stat weights, also for your alts. Holdings: what all your characters own and where. Optional Auctionator prices.
 ## Author: Peter
-## Version: 1.6.5
+## Version: 1.6.6
 ## SavedVariables: LOF_DB
 ## OptionalDeps: Auctionator
 ## IconTexture: Interface\Icons\INV_Misc_Coin_02

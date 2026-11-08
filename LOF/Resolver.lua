@@ -8,6 +8,24 @@
 --
 -- Changelog
 -- ---------
+-- v0.10.16: E15b (Peter, 5 Nov test): Recent Loot keeps 25 rows PER
+--   character (max 250 for all together). The old shared limit of 25
+--   let one character's loot push out another's (audit O33).
+-- v0.10.15: merge for 1.6.6 (Peter, 4 Nov): Recent Loot per character
+--   (0.10.13, E15) and the Unique fix (0.10.14, E18) together.
+-- v0.10.14: E18 (Peter, 23 Oct; branch, after launch). GetBlockedLoot
+--   leaves out a Unique item you already have (Upgrade.IsUniqueOwned):
+--   the game refuses it, so a swap would delete a bag item for nothing.
+--   It returns that item as a second value; BuildSwapDecision tells the
+--   player once when it was the only blocked loot. (0.10.13 is the
+--   Recent Loot branch; merge both after launch.)
+-- v0.10.13: Recent Loot per character (Peter, 22 Oct; branch, after
+--   launch). LOF_DB is account-wide, so a new alt showed the loot of
+--   another character. RecordLoot stores the character key
+--   (Holdings.GetCurrentCharKey, the same key as reagent choices);
+--   GetRecentLootRows shows only the current character's rows. Older
+--   rows without a key are no longer shown. Unknown key (character not
+--   loaded yet): no rows.
 -- v0.10.12: E12 fix. The client sends QUEST_FINISHED between QUEST_PROGRESS
 --   and QUEST_COMPLETE, which wiped the turn-in list: slots freed by a
 --   handed-in stack were never counted. ForgetQuestTurnIn now drops the
@@ -285,7 +303,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_RESOLVER = "0.10.12"
+LOF.VERSION_RESOLVER = "0.10.16"
 
 local Resolver = {}
 LOF.Resolver = Resolver
@@ -1196,9 +1214,13 @@ function Resolver.GetBlockedLoot()
     local consumedByItem = {}
     local roomLeft = {}   -- v0.4.9: free stack room per itemID, shared
 
+    local uniqueOwned   -- v0.10.14 (E18)
+    local U = Resolver.Upgrade
     for lootSlot = 1, (GetNumLootItems() or 0) do
         local info = Resolver.ResolveLootSlot(lootSlot)
-        if info and info.itemID then
+        if info and info.itemID and U and U.IsUniqueOwned and U.IsUniqueOwned(info.link) then
+            uniqueOwned = uniqueOwned or info
+        elseif info and info.itemID then
             local gained = math.max(0, Resolver.CountItemInBags(info.itemID) - Resolver.GetLootBaseline(info.itemID))
             local consumed = consumedByItem[info.itemID] or 0
             local resolved = math.min(info.count, math.max(0, gained - consumed))
@@ -1248,7 +1270,7 @@ function Resolver.GetBlockedLoot()
         if a.value ~= b.value then return a.value > b.value end
         return a.lootSlot < b.lootSlot
     end)
-    return blocked
+    return blocked, uniqueOwned
 end
 
 -- The swap decision. The only place that decides whether to offer a swap.
@@ -1267,8 +1289,15 @@ function Resolver.BuildSwapDecision(skip)
         return { shouldShowPopup = false, stopReason = "lootwindow_closed" }
     end
 
-    local blocked = Resolver.GetBlockedLoot()
+    local blocked, uniqueOwned = Resolver.GetBlockedLoot()
     if #blocked == 0 then
+        if uniqueOwned then   -- v0.10.14 (E18)
+            return {
+                shouldShowPopup = false, stopReason = "unique_owned",
+                message = "You already have " .. tostring(uniqueOwned.name or "this item")
+                    .. " (Unique): the game will not let you loot a second one.",
+            }
+        end
         return { shouldShowPopup = false, stopReason = "no_blocked_loot" }
     end
 
@@ -1487,40 +1516,60 @@ function Resolver.InitSessionMoney()
     end
 end
 
-local RECENT_LOOT_KEEP = 25
+local RECENT_LOOT_KEEP = 25        -- per character (v0.10.16)
+local RECENT_LOOT_MAX_ALL = 250    -- all characters together (v0.10.16)
 
 function Resolver.RecordLoot(link, count)
     if not link then return end
     local info = BuildItemInfo(link, count)
+    local H = Resolver.Holdings
     table.insert(LOF.db.recentLoot, 1, {
         itemID = info.itemID, link = link, name = info.name,
         icon = info.icon, quality = info.quality, count = info.count,
         time = time(),
+        char = H and H.GetCurrentCharKey and H.GetCurrentCharKey() or nil,  -- v0.10.13
     })
-    while #LOF.db.recentLoot > RECENT_LOOT_KEEP do
-        table.remove(LOF.db.recentLoot)
+    -- v0.10.16: trim per character (newest first), so one character's
+    -- loot never pushes out another's; rows without a key count as one group.
+    local list, perChar = LOF.db.recentLoot, {}
+    for i = #list, 1, -1 do
+        local k = tostring(list[i].char)
+        perChar[k] = (perChar[k] or 0) + 1
+    end
+    for i = #list, 1, -1 do
+        local k = tostring(list[i].char)
+        if perChar[k] > RECENT_LOOT_KEEP or #list > RECENT_LOOT_MAX_ALL then
+            perChar[k] = perChar[k] - 1
+            table.remove(list, i)
+        end
     end
 end
 
 function Resolver.GetRecentLootRows(limit)
     local rows = {}
-    for i = 1, math.min(limit or 3, #LOF.db.recentLoot) do
-        local r = LOF.db.recentLoot[i]
-        -- Re-resolve value: item info may not have been cached at loot time.
-        local info = BuildItemInfo(r.link, r.count)
-        rows[#rows + 1] = {
-            link = r.link, count = r.count,
-            name = info.infoReady and info.name or r.name,
-            icon = info.icon or r.icon,
-            quality = info.quality or r.quality,
-            value = info.value,
-            hasValue = info.value > 0,
-            -- value fields for the tooltip
-            vendorEach = info.vendorEach, ahEach = info.ahEach, valueEach = info.valueEach,
-            ahAgeDays = info.ahAgeDays, freshness = info.freshness,
-            valueSource = info.valueSource, valueReason = info.valueReason,
-            de = info.de,
-        }
+    -- v0.10.13: only the current character's loot (no key yet: no rows).
+    local H = Resolver.Holdings
+    local charKey = H and H.GetCurrentCharKey and H.GetCurrentCharKey()
+    if not charKey then return rows end
+    for _, r in ipairs(LOF.db.recentLoot) do
+        if #rows >= (limit or 3) then break end
+        if r.char == charKey then
+            -- Re-resolve value: item info may not have been cached at loot time.
+            local info = BuildItemInfo(r.link, r.count)
+            rows[#rows + 1] = {
+                link = r.link, count = r.count,
+                name = info.infoReady and info.name or r.name,
+                icon = info.icon or r.icon,
+                quality = info.quality or r.quality,
+                value = info.value,
+                hasValue = info.value > 0,
+                -- value fields for the tooltip
+                vendorEach = info.vendorEach, ahEach = info.ahEach, valueEach = info.valueEach,
+                ahAgeDays = info.ahAgeDays, freshness = info.freshness,
+                valueSource = info.valueSource, valueReason = info.valueReason,
+                de = info.de,
+            }
+        end
     end
     return rows
 end

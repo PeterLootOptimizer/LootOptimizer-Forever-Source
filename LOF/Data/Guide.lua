@@ -7,6 +7,8 @@
 --
 -- Changelog
 -- ---------
+-- v0.8.0: What's new 1.6.6 "Fairer upgrade advice & Recent Loot per
+--   character" (Peter, 4 Nov).
 -- v0.7.0: What's new 1.6.5 "Spell Damage and Spell Healing count" (Peter,
 --   21 Oct).
 -- v0.6.0: What's new 1.6.4 "Quest rewards, protected ammo & quieter full
@@ -45,7 +47,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_DATA_GUIDE = "0.7.0"
+LOF.VERSION_DATA_GUIDE = "0.8.0"
 
 LOF.Data = LOF.Data or {}
 
@@ -92,6 +94,17 @@ LOF.Data.Guide = {
     },
 
     whatsNew = {
+        {
+            version = "1.6.6",
+            title = "Fairer upgrade advice & Recent Loot per character",
+            items = {
+                { color = "green", text = "[green]Hit and Crit[/] now count as the percentages the game shows (10 hit rating = 1% hit, 14 crit rating = 1% crit). Before, gear with Hit or Crit looked 10 to 14 times better than it was." },
+                { color = "green", text = "Stat weights 0.2.5 (beta) follow Blizzard's launch class changes: Retribution, Holy Paladin, Restoration and Feral Druid, Enhancement, Hunter, Rogue, Arcane, Fire and Demonology." },
+                { color = "orange", text = "[orange]ALT UPGRADE[/] respects \"Classes:\" on an item: a class set is only advised for that class." },
+                { color = "gold", text = "Loot that is Unique and that you already have is no longer offered for a swap (the game would refuse it). LOF tells you once instead." },
+                { color = "white", text = "Recent Loot shows only the character you are playing. After this update the list starts empty once." },
+            },
+        },
         {
             version = "1.6.5",
             title = "Spell Damage and Spell Healing count",

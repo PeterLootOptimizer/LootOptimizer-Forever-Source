@@ -8,6 +8,25 @@
 --
 -- Changelog
 -- ---------
+-- v0.13.8: E17 hardened (audit 1.6.6, Peter 4 Nov). AltClassAllowed
+--   matches the "Classes:" names on the class token through the game's
+--   own male and female class names, so gendered or other-language names
+--   match too, and colour codes around a name are dropped. A name LOF
+--   cannot map to a class, or an alt whose class is unknown, means no
+--   restriction: the item stays protected (agreement 5).
+-- v0.13.7: E18 (Peter, 23 Oct; branch, after launch). Upgrade.IsUniqueOwned:
+--   a Unique item ("Unique" / "Unique (N)") you already have (bags, bank,
+--   equipped) cannot be looted again ("You can't carry any more of those
+--   items"). The swap deleted a bag item for nothing (Seal of the
+--   Archmagus). Unreadable tooltip: false (as before, normal swap).
+-- v0.13.6: E17 (Peter, 23 Oct; branch, after launch). Alt upgrades
+--   ignored a class restriction on the item ("Classes: Druid"): Cenarion
+--   Vestments were an upgrade for a Hunter and a Paladin. AltCanUse now
+--   reads the "Classes:" line (ITEM_CLASSES_ALLOWED) from the tooltip
+--   data and compares it with the alt's className. Unknown (no tooltip
+--   data, item not loaded, no className): no restriction, so the item
+--   stays protected (fail safe). FormatPattern is shared with the level
+--   pattern (GetLevelPattern).
 -- v0.13.5: E4 follow-up (release audit G1): the epoch only rises when an
 --   item LOF itself requested arrives (itemData.waiting, by itemID), not on
 --   every GET_ITEM_INFO_RECEIVED. An item the server reports as not
@@ -235,7 +254,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_RESOLVER_UPGRADE = "0.13.5"
+LOF.VERSION_RESOLVER_UPGRADE = "0.13.8"
 
 local Upgrade = {}
 LOF.Resolver.Upgrade = Upgrade
@@ -1040,6 +1059,9 @@ local function GetUsability(classFile)
     return u and u.classes and u.classes[classFile or ""]
 end
 
+-- v0.13.6 (E17): set further down, after GetTooltipData.
+local AltClassAllowed
+
 -- Can this class use the item type? Returns usable, level needed
 -- (item level requirement or the armor type's level, the higher).
 local function AltCanUse(profile, link)
@@ -1056,6 +1078,7 @@ local function AltCanUse(profile, link)
     else
         return false
     end
+    if AltClassAllowed and not AltClassAllowed(profile, link) then return false end   -- v0.13.6 (E17)
     local minLevel = tonumber(select(5, LOF.GetItemInfo(link)) or 1) or 1
     return true, math.max(need, minLevel)
 end
@@ -1365,14 +1388,19 @@ end
 local tooltipCache = { version = nil, entries = {} }
 
 -- v0.10.1: red lines in tooltip data: anyRed, levelOnly, needLevel.
-local LEVEL_PATTERN
-local function GetLevelPattern()
-    if LEVEL_PATTERN ~= nil then return LEVEL_PATTERN end
-    local fmt = _G.ITEM_MIN_LEVEL
+-- v0.13.6: Lua pattern for a Blizzard format string (%d and %s captured).
+local function FormatPattern(fmt)
     if type(fmt) ~= "string" or fmt == "" then return false end
     local pat = fmt:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1")
     pat = pat:gsub("%%d", "(%%d+)")
-    LEVEL_PATTERN = "^" .. pat .. "$"
+    pat = pat:gsub("%%s", "(.+)")
+    return "^" .. pat .. "$"
+end
+
+local LEVEL_PATTERN
+local function GetLevelPattern()
+    if LEVEL_PATTERN ~= nil then return LEVEL_PATTERN end
+    LEVEL_PATTERN = FormatPattern(_G.ITEM_MIN_LEVEL)
     return LEVEL_PATTERN
 end
 
@@ -1407,6 +1435,86 @@ local function GetTooltipData(link, bag, slot)
         ok, data = pcall(C_TooltipInfo.GetHyperlink, link)
     end
     return ok and data or nil
+end
+
+-- v0.13.6 (E17): classes an item is restricted to ("Classes: Druid"),
+-- as a set of localized class names; false = no restriction. Only a
+-- loaded item's answer is cached.
+local classesCache = {}
+local CLASSES_PATTERN
+local function ItemAllowedClasses(link)
+    if not link then return false end
+    if classesCache[link] ~= nil then return classesCache[link] end
+    if CLASSES_PATTERN == nil then CLASSES_PATTERN = FormatPattern(_G.ITEM_CLASSES_ALLOWED) end
+    local data = CLASSES_PATTERN and GetTooltipData(link)
+    if type(data) ~= "table" or type(data.lines) ~= "table" then return false end
+    local allowed = false
+    for _, line in ipairs(data.lines) do
+        local list = type(line.leftText) == "string" and line.leftText:match(CLASSES_PATTERN)
+        if list then
+            allowed = {}
+            for name in list:gmatch("[^,]+") do
+                -- v0.13.8: drop colour codes around a class name
+                name = name:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+                allowed[name:match("^%s*(.-)%s*$")] = true
+            end
+            break
+        end
+    end
+    if allowed or LOF.GetItemInfo(link) then classesCache[link] = allowed end
+    return allowed
+end
+
+-- v0.13.7 (E18): true when the item is Unique and you already have the
+-- maximum (bags + bank via GetItemCount, or equipped).
+local UNIQUE_N_PATTERN
+function Upgrade.IsUniqueOwned(link)
+    if not link then return false end
+    local itemID = LOF.GetItemInfoInstant(link)
+    if not itemID then return false end
+    local CI = _G.C_Item
+    local count = tonumber(CI and CI.GetItemCount and CI.GetItemCount(itemID, true)) or 0
+    local equipped = CI and CI.IsEquippedItem and CI.IsEquippedItem(itemID)
+    if equipped and count < 1 then count = 1 end
+    if count < 1 then return false end
+    local data = GetTooltipData(link)
+    if type(data) ~= "table" or type(data.lines) ~= "table" then return false end
+    if UNIQUE_N_PATTERN == nil then UNIQUE_N_PATTERN = FormatPattern(_G.ITEM_UNIQUE_MULTIPLE) end
+    local uniqueText = _G.ITEM_UNIQUE or "Unique"
+    for _, line in ipairs(data.lines) do
+        local text = line.leftText
+        if text == uniqueText then return true end
+        local n = UNIQUE_N_PATTERN and type(text) == "string" and tonumber(text:match(UNIQUE_N_PATTERN))
+        if n then return count >= n end
+    end
+    return false
+end
+
+-- v0.13.8: match on the class token via the game's own male and female
+-- class names (any language, gendered names such as "Druidin"). A name
+-- LOF cannot map to a class means: no restriction (item stays protected).
+local function ClassNameToken(name)
+    for _, tbl in ipairs({ _G.LOCALIZED_CLASS_NAMES_MALE, _G.LOCALIZED_CLASS_NAMES_FEMALE }) do
+        if type(tbl) == "table" then
+            for token, localized in pairs(tbl) do
+                if localized == name then return token end
+            end
+        end
+    end
+    return nil
+end
+
+AltClassAllowed = function(profile, link)
+    local allowed = ItemAllowedClasses(link)
+    if not allowed then return true end
+    if profile.className and allowed[profile.className] then return true end
+    for name in pairs(allowed) do
+        local token = ClassNameToken(name)
+        if not token then return true end          -- unknown name: fail safe
+        if profile.class and token == profile.class then return true end
+    end
+    if not profile.class then return true end      -- alt's class unknown: fail safe
+    return false
 end
 
 function Upgrade.GetTooltipInfo(link, bag, slot)
