@@ -7,6 +7,10 @@
 --
 -- Changelog
 -- ---------
+-- v0.3.4: E20: statLabels for damage of one school ("Shadow Damage"
+--   ...), so the comparison table never shows a stat key.
+-- v0.3.3: E21: weapons.excludedSubclasses (fishing pole) removed; the
+--   Upgrade Advisor's default Ignored list covers the fishing poles now.
 -- v0.3.2: statLabels: LOF's own player label for a stat key, where the
 --   game's label does not fit a table (Peter, 16 Oct): Blizzard's
 --   "damage per second" is lowercase (written for inside a sentence) ->
@@ -33,7 +37,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_DATA_STATPROFILES = "0.3.2"
+LOF.VERSION_DATA_STATPROFILES = "0.3.4"
 
 LOF.Data = LOF.Data or {}
 
@@ -65,10 +69,6 @@ LOF.Data.StatProfiles = {
         -- with main hand + off-hand.
         offHandDamageFactor = 0.5,
         confidence          = "beta",
-        -- Weapon subclass IDs never suggested as upgrade.
-        excludedSubclasses  = {
-            [20] = true,   -- Fishing Pole
-        },
     },
 
     -- Usability per class (v0.3.0), for alts (no tooltip available).
@@ -147,6 +147,13 @@ LOF.Data.StatProfiles = {
     -- v0.3.2: player labels that replace the game's label for a stat key.
     statLabels = {
         ITEM_MOD_DAMAGE_PER_SECOND_SHORT = "Weapon DPS",
+        -- v0.3.4 (E20)
+        ITEM_MOD_SHADOW_DAMAGE_DONE_SHORT = "Shadow Damage",
+        ITEM_MOD_FIRE_DAMAGE_DONE_SHORT   = "Fire Damage",
+        ITEM_MOD_FROST_DAMAGE_DONE_SHORT  = "Frost Damage",
+        ITEM_MOD_ARCANE_DAMAGE_DONE_SHORT = "Arcane Damage",
+        ITEM_MOD_NATURE_DAMAGE_DONE_SHORT = "Nature Damage",
+        ITEM_MOD_HOLY_DAMAGE_DONE_SHORT   = "Holy Damage",
     },
 
     -- Display order of stats in the explanation (others follow).

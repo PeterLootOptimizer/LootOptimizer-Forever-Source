@@ -8,6 +8,14 @@
 --
 -- Changelog
 -- ---------
+-- v0.13.9: E21 (Peter, 8 Nov): default Ignored list. Default tools from
+--   Resolver.lua that are weapons (Skinning Knife, Mining Pick, fishing
+--   poles, Blacksmith Hammer ...) get no upgrade advice for any character
+--   or alt, and show in the Ignored list as "default". Removing one is
+--   remembered account wide (LOF_DB.removedDefaultIgnores), like the
+--   whitelist defaults. Replaces the hidden fishing pole rule
+--   (StatProfiles excludedSubclasses): IsExcludedWeapon is now
+--   IsExcludedFromAdvice, at the same five places.
 -- v0.13.8: E17 hardened (audit 1.6.6, Peter 4 Nov). AltClassAllowed
 --   matches the "Classes:" names on the class token through the game's
 --   own male and female class names, so gendered or other-language names
@@ -254,7 +262,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_RESOLVER_UPGRADE = "0.13.8"
+LOF.VERSION_RESOLVER_UPGRADE = "0.13.9"
 
 local Upgrade = {}
 LOF.Resolver.Upgrade = Upgrade
@@ -387,6 +395,8 @@ function Upgrade.GetAdvisorSettings()
     return snap
 end
 
+local WEAPON_CLASS_ID = (_G.Enum and _G.Enum.ItemClass and _G.Enum.ItemClass.Weapon) or 2
+
 local function GetCharKey()
     return tostring(UnitName("player") or "?") .. "-" .. tostring(GetRealmName() or "?")
 end
@@ -398,6 +408,22 @@ local function GetIgnoredTable()
     local key = GetCharKey()
     LOF.db.ignoredUpgrades[key] = LOF.db.ignoredUpgrades[key] or {}
     return LOF.db.ignoredUpgrades[key]
+end
+
+-- v0.13.9 (E21): default Ignored list, account wide: the default tools
+-- (Resolver.lua) that are weapons, unless the player removed one.
+-- No answer from the resolver: not ignored (advice as before).
+local function GetRemovedDefaultIgnores()
+    LOF.db.removedDefaultIgnores = LOF.db.removedDefaultIgnores or {}
+    return LOF.db.removedDefaultIgnores
+end
+
+local function IsDefaultIgnored(itemID)
+    if not itemID then return false end
+    local R = LOF.Resolver
+    if not (R and R.IsDefaultToolID and R.IsDefaultToolID(itemID)) then return false end
+    local classID = select(6, LOF.GetItemInfoInstant(itemID))
+    return classID == WEAPON_CLASS_ID and not GetRemovedDefaultIgnores()[itemID]
 end
 
 function Upgrade.IsIgnored(itemID)
@@ -417,6 +443,11 @@ function Upgrade.Unignore(itemID)
         LOF.Print(tostring(t[itemID].name) .. " removed from ignored upgrades.")
         t[itemID] = nil
         ignoreVersion = ignoreVersion + 1
+    elseif IsDefaultIgnored(itemID) then   -- v0.13.9 (E21)
+        GetRemovedDefaultIgnores()[itemID] = true
+        ignoreVersion = ignoreVersion + 1
+        local name = LOF.GetItemInfo(itemID)
+        LOF.Print(tostring(name or ("item " .. itemID)) .. " removed from ignored upgrades (all characters).")
     end
 end
 
@@ -498,7 +529,21 @@ function Upgrade.GetIgnoredRows()
             }
         end
     end
+    -- v0.13.9 (E21): default entries after the player's own
+    local R = LOF.Resolver
+    local own = GetIgnoredTable()
+    for _, itemID in ipairs(R and R.GetDefaultToolIDs and R.GetDefaultToolIDs() or {}) do
+        if not own[itemID] and IsDefaultIgnored(itemID) then
+            local name, _, quality, _, _, _, _, _, _, icon = LOF.GetItemInfo(itemID)
+            if name then   -- not loaded yet: shown after GET_ITEM_INFO_RECEIVED
+                rows[#rows + 1] = {
+                    itemID = itemID, name = name, quality = quality, icon = icon, isDefault = true,
+                }
+            end
+        end
+    end
     table.sort(rows, function(a, b)
+        if (a.isDefault == true) ~= (b.isDefault == true) then return not a.isDefault end
         if a.name ~= b.name then return a.name < b.name end
         return tostring(a.forName or "") < tostring(b.forName or "")
     end)
@@ -777,8 +822,6 @@ local function GetClassProfile()
     return profile, classFile, data and data.meta
 end
 
-local WEAPON_CLASS_ID = (_G.Enum and _G.Enum.ItemClass and _G.Enum.ItemClass.Weapon) or 2
-
 -- -------------------------------------------------------------
 -- v0.6.0: spec mix + weights
 -- -------------------------------------------------------------
@@ -915,11 +958,11 @@ end
 
 -- Excluded weapon types (e.g. fishing poles), from the data layer.
 
-local function IsExcludedWeapon(link)
+-- v0.13.9 (E21): no upgrade advice for an item on the default Ignored
+-- list (was: weapon subclasses from StatProfiles, the fishing pole).
+local function IsExcludedFromAdvice(link)
     if not link then return false end
-    local _, _, _, _, _, classID, subclassID = LOF.GetItemInfoInstant(link)
-    local excluded = GetWeaponData().excludedSubclasses or {}
-    return classID == WEAPON_CLASS_ID and subclassID ~= nil and excluded[subclassID] == true
+    return IsDefaultIgnored((LOF.GetItemInfoInstant(link)))
 end
 
 -- -------------------------------------------------------------
@@ -1179,7 +1222,7 @@ function Upgrade.EvaluateForAlts(link, profiles)
         profiles = H.GetAltGearProfiles()
     end
     local itemID, _, _, equipLoc = LOF.GetItemInfoInstant(link)
-    if not (equipLoc and SLOTS[equipLoc]) or IsExcludedWeapon(link) then return list end
+    if not (equipLoc and SLOTS[equipLoc]) or IsExcludedFromAdvice(link) then return list end
     for _, profile in ipairs(profiles) do
         if Upgrade.IsAltEnabled(profile.name)                     -- v0.9.0
             and not Upgrade.IsIgnoredFor(itemID, profile.name) then   -- v0.8.0
@@ -1519,7 +1562,7 @@ end
 
 function Upgrade.GetTooltipInfo(link, bag, slot)
     if not link or not Upgrade.IsEnabled() or not Upgrade.IsGearLink(link) then return nil end
-    if IsExcludedWeapon(link) then return nil end
+    if IsExcludedFromAdvice(link) then return nil end
     if not LOF.GetItemInfo(link) then return nil end   -- item data not loaded yet
 
     local bound = false
@@ -1632,7 +1675,7 @@ function Upgrade.Evaluate(bag, slot)
         verdict.verdict = Upgrade.NOT_USABLE   -- not a gear slot we handle
         return verdict
     end
-    if IsExcludedWeapon(link) then
+    if IsExcludedFromAdvice(link) then
         verdict.verdict = Upgrade.EXCLUDED     -- e.g. fishing pole (data layer)
         return verdict
     end
@@ -1733,7 +1776,7 @@ function Upgrade.EvaluateLootSlot(lootSlot, link)
     local targets = GetTargetSlots(equipLoc)
     if not targets then return nil end                -- not gear
     if Upgrade.IsIgnored(itemID) then return nil end
-    if IsExcludedWeapon(link) then return Upgrade.EXCLUDED end
+    if IsExcludedFromAdvice(link) then return Upgrade.EXCLUDED end
 
     local red = LootSlotHasRedLine(lootSlot, link)
     if red ~= false then return Upgrade.NOT_USABLE end  -- red, or unknown
@@ -1755,7 +1798,7 @@ function Upgrade.GetLootSlotComparison(lootSlot, link)
     if not Upgrade.IsEnabled() or not link then return nil end
     local itemID, _, _, equipLoc = LOF.GetItemInfoInstant(link)
     local targets = GetTargetSlots(equipLoc)
-    if not targets or IsExcludedWeapon(link) then return nil end
+    if not targets or IsExcludedFromAdvice(link) then return nil end
     if LootSlotHasRedLine(lootSlot, link) ~= false then return nil end
     local mix, basis, source, data = Upgrade.GetWeightMix()
     local best

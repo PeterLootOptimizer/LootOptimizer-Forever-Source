@@ -1,4 +1,4 @@
-# LootOptimizer Forever (LOF) v1.6.6
+# LootOptimizer Forever (LOF) v1.6.7
 
 Bag full while looting? LOF compares the loot with the cheapest item in your
 bags (vendor value x stack, or the auction house value when Auctionator is
@@ -12,23 +12,23 @@ means. Characters you deleted can be removed from LOF.
 ## Files
 | File | Version | Role |
 |---|---|---|
-| LOF.toc | 1.6.6 | Interface 16001 (WoW: Forever), SavedVariables `LOF_DB`, OptionalDeps Auctionator |
+| LOF.toc | 1.6.7 | Interface 16001 (WoW: Forever), SavedVariables `LOF_DB`, OptionalDeps Auctionator |
 | Libs/ | - | Embedded libraries: LibStub, CallbackHandler-1.0, LibDataBroker-1.1, LibDBIcon-1.0 (minimap button; Ace3 BSD license, see Libs/LICENSE-Ace3.txt) |
 | Core.lua | 0.3.1 | Namespace, DB (first-install flag), API shims, money format (coin icons), event hub |
-| Data/StatProfiles.lua | 0.3.2 | Reference data: main stat per class, usable armor/weapon types per class, duplicate stat keys, stat display order |
+| Data/StatProfiles.lua | 0.3.4 | Reference data: main stat per class, usable armor/weapon types per class, duplicate stat keys, stat display order |
 | Data/PriceRules.lua | 0.1.0 | Reference data: AH freshness bands, default value source per quality |
 | Data/ProfessionRanks.lua | 0.2.0 | Reference data: profession ranks, when the next rank can be trained, materials per profession |
 | Data/DisenchantTable.lua | 0.1.0 | Reference data: what disenchanting gives per quality, item level band, armor/weapon (classic table, checked on Forever) |
-| Data/StatWeights.lua | 0.2.5 | Reference data: stat weights per class and talent tree (beta) |
+| Data/StatWeights.lua | 0.2.6 | Reference data: stat weights per class and talent tree (beta) |
 | Data/ProfessionReagents.lua | 0.2.0 | Reference data: looted and crafted profession materials with the skill range per profession |
-| Data/Guide.lua | 0.8.0 | Reference data: texts of the Guide (What's new, How to use, Colors) |
-| Resolver.lua | 0.10.16 | ALL swap intelligence: policy (upgrade / reagent protection), decision (quest / value / gear / alt / reagent), Make room (now), Guide trigger, snapshot |
+| Data/Guide.lua | 0.9.0 | Reference data: texts of the Guide (What's new, How to use, Colors) |
+| Resolver.lua | 0.10.17 | ALL swap intelligence: policy (upgrade / reagent protection), decision (quest / value / gear / alt / reagent), Make room (now), Guide trigger, snapshot |
 | ResolverValue.lua | 0.2.0 | Value intelligence: vendor, Auctionator or disenchant value, freshness, reason codes, settings |
-| ResolverUpgrade.lua | 0.13.8 | Upgrade Advisor intelligence: spec, weighted score, verdict, alts, protection (also future upgrades), settings per character, Send to alts |
+| ResolverUpgrade.lua | 0.13.9 | Upgrade Advisor intelligence: spec, weighted score, verdict, alts, protection (also future upgrades), settings per character, Send to alts |
 | ResolverHoldings.lua | 0.11.2 | Holdings intelligence: per character bags/bank/equipped/mail/AH, talents, gold, professions, Gear for alts, forget a character |
 | ResolverReagents.lua | 0.1.3 | Reagent intelligence: which materials the current character keeps (own choice or skill range), Reagents list |
 | Capture.lua | 1.9.13 | Events, loot baseline, swap session, Make room (now), upgrade flow, Guide timing, combat / moving, Holdings reads, mail |
-| UI.lua | 1.17.26 | Panel, tabs, popup styles (one table), popups (swap, make room), comparison table, lists, tooltips, minimap icon (LibDBIcon), /lof |
+| UI.lua | 1.17.27 | Panel, tabs, popup styles (one table), popups (swap, make room), comparison table, lists, tooltips, minimap icon (LibDBIcon), /lof |
 | UIHoldings.lua | 0.9.5 | The Holdings window (incl. Gear for alts, Remove from LOF), scales with the screen |
 | UIAltMail.lua | 0.1.4 | The Send to alts window |
 | UIReagents.lua | 0.2.5 | The Reagents list (Settings window) |

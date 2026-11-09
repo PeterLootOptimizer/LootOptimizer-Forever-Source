@@ -7,6 +7,8 @@
 --
 -- Changelog
 -- ---------
+-- v1.17.27: E21: the Ignored list shows default entries (all characters)
+--   as "default" in the whitelist's blue; the resolver decides which.
 -- v1.17.26: Swap-family popup 30 px wider (SWAP_WIDTH 420) so the large
 --   quest note fits on one line; the 4 Make room buttons share the width.
 -- v1.17.25: The quest note in Make room uses GameFontNormalLarge (Peter:
@@ -570,7 +572,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_UI = "1.17.26"
+LOF.VERSION_UI = "1.17.27"
 
 -- The .toc is the single source for the addon version.
 do
@@ -3266,7 +3268,8 @@ local function RenderIgnored()
     list.hint:SetText("Click an item to suggest it again.")
     for i, ig in ipairs(rows) do
         local row = GetListRow(i)
-        local status = ig.forName and (GREY .. "for " .. tostring(ig.forName) .. "|r") or (GREY .. "ignored|r")
+        local status = ig.forName and (GREY .. "for " .. tostring(ig.forName) .. "|r")
+            or (ig.isDefault and (BLUE .. "default|r")) or (GREY .. "ignored|r")   -- v1.17.27 (E21)
         FillItemRow(row, ig.name, ig.quality, ig.icon, 1, status, "item:" .. ig.itemID)
         row.hint = "Click to remove from ignored upgrades."
         local itemID, forName = ig.itemID, ig.forName

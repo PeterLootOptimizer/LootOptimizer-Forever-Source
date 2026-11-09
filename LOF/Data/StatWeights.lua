@@ -7,6 +7,13 @@
 --
 -- Changelog
 -- ---------
+-- v0.2.6: E20 (CurseForge report 7 Nov, Peter 8 Nov): damage for one
+--   school counts. Measured on Forever (player's green chest): +3 Shadow
+--   Damage = ITEM_MOD_SHADOW_DAMAGE_DONE_SHORT 3; before, it counted 0.
+--   New columns Shadow, Fire, Frost, Arcane, Nature, Holy. Only Shadow is
+--   measured; the other keys follow the same pattern (a wrong name counts
+--   0, as before). Weight = the tree's Dmg weight for its main school,
+--   less for a second school, 0 for healers and melee (LOF's own, beta).
 -- v0.2.5: Blizzard development notes of 2 and 3 Nov 2026 (launch tuning;
 --   Peter, 4 Nov). Only changes with a Blizzard source (stat weights watch
 --   3 and 4 Nov). Retribution Int 0.3 -> 0.5, SP/Dmg 0.7 -> 0.8 (Champion
@@ -89,14 +96,14 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_DATA_STATWEIGHTS = "0.2.5"
+LOF.VERSION_DATA_STATWEIGHTS = "0.2.6"
 
 LOF.Data = LOF.Data or {}
 
 LOF.Data.StatWeights = {
     meta = {
         version    = "v0.2",
-        date       = "2026-11-04",
+        date       = "2026-11-08",
         confidence = "beta",
         note       = "LOF's own weights; no published Forever weights exist yet.",
     },
@@ -114,6 +121,13 @@ LOF.Data.StatWeights = {
         SP    = { "ITEM_MOD_SPELL_POWER_SHORT" },
         Dmg   = { "ITEM_MOD_SPELL_DAMAGE_DONE_SHORT" },
         Heal  = { "ITEM_MOD_SPELL_HEALING_DONE_SHORT" },
+        -- v0.2.6 (E20): damage for one school. Shadow measured 8 Nov.
+        Shadow = { "ITEM_MOD_SHADOW_DAMAGE_DONE_SHORT" },
+        Fire   = { "ITEM_MOD_FIRE_DAMAGE_DONE_SHORT" },
+        Frost  = { "ITEM_MOD_FROST_DAMAGE_DONE_SHORT" },
+        Arcane = { "ITEM_MOD_ARCANE_DAMAGE_DONE_SHORT" },
+        Nature = { "ITEM_MOD_NATURE_DAMAGE_DONE_SHORT" },
+        Holy   = { "ITEM_MOD_HOLY_DAMAGE_DONE_SHORT" },
         Armor = { "RESISTANCE0_NAME" },
         -- Hit and Crit: no direct keys. Their rating keys are in `related`
         -- below (weights are per 1%, items give rating).
@@ -144,8 +158,8 @@ LOF.Data.StatWeights = {
         } },
         PALADIN = { default = 3, trees = {
             { name = "Holy",        Sta = 0.3, Int = 1.0, Spi = 0.4, SP = 0.8, Heal = 0.8, Crit = 9.5, Armor = 0.01, DPS = 0.1 },
-            { name = "Protection",  Str = 0.6, Agi = 0.4, Sta = 1.0, Int = 0.3, AP = 0.2, SP = 0.5, Dmg = 0.5, Hit = 6, Crit = 3, Armor = 0.08, DPS = 1.0 },
-            { name = "Retribution", Str = 1.0, Agi = 0.5, Sta = 0.3, Int = 0.5, AP = 0.5, SP = 0.8, Dmg = 0.8, Hit = 12, Crit = 12, Armor = 0.01, DPS = 3.0 },
+            { name = "Protection",  Str = 0.6, Agi = 0.4, Sta = 1.0, Int = 0.3, AP = 0.2, SP = 0.5, Dmg = 0.5, Holy = 0.5, Hit = 6, Crit = 3, Armor = 0.08, DPS = 1.0 },
+            { name = "Retribution", Str = 1.0, Agi = 0.5, Sta = 0.3, Int = 0.5, AP = 0.5, SP = 0.8, Dmg = 0.8, Holy = 0.8, Hit = 12, Crit = 12, Armor = 0.01, DPS = 3.0 },
         } },
         HUNTER = { default = 1, trees = {
             { name = "Beast Mastery", Agi = 1.0, Sta = 0.4, Int = 0.3, AP = 0.5, Hit = 10, Crit = 10, Armor = 0.01, RangedDPS = 2.5, DPS = 0.5 },
@@ -160,25 +174,25 @@ LOF.Data.StatWeights = {
         PRIEST = { default = 3, trees = {
             { name = "Discipline", Sta = 0.3, Int = 0.6, Spi = 0.7, SP = 1.0, Heal = 1.0, Crit = 6, Wand = 1.5, Armor = 0.01, DPS = 0.1 },
             { name = "Holy",       Sta = 0.3, Int = 0.6, Spi = 0.8, SP = 1.0, Heal = 1.0, Crit = 5, Wand = 1.5, Armor = 0.01, DPS = 0.1 },
-            { name = "Shadow",     Sta = 0.3, Int = 0.6, Spi = 0.6, SP = 1.0, Dmg = 1.0, Hit = 8, Crit = 9, Wand = 1.5, Armor = 0.01, DPS = 0.1 },
+            { name = "Shadow",     Sta = 0.3, Int = 0.6, Spi = 0.6, SP = 1.0, Dmg = 1.0, Shadow = 1.0, Hit = 8, Crit = 9, Wand = 1.5, Armor = 0.01, DPS = 0.1 },
         } },
         MAGE = { default = 2, trees = {
-            { name = "Arcane", Sta = 0.3,  Int = 0.85, Spi = 0.7, SP = 1.0, Dmg = 1.0, Hit = 12, Crit = 8,  Wand = 1.5, Armor = 0.01, DPS = 0.1 },
-            { name = "Fire",   Sta = 0.3,  Int = 0.7, Spi = 0.6, SP = 1.0, Dmg = 1.0, Hit = 12, Crit = 10, Wand = 1.5, Armor = 0.01, DPS = 0.1 },
-            { name = "Frost",  Sta = 0.35, Int = 0.7, Spi = 0.6, SP = 1.0, Dmg = 1.0, Hit = 12, Crit = 8,  Wand = 1.5, Armor = 0.01, DPS = 0.1 },
+            { name = "Arcane", Sta = 0.3,  Int = 0.85, Spi = 0.7, SP = 1.0, Dmg = 1.0, Arcane = 0.8, Frost = 0.3, Hit = 12, Crit = 8,  Wand = 1.5, Armor = 0.01, DPS = 0.1 },
+            { name = "Fire",   Sta = 0.3,  Int = 0.7, Spi = 0.6, SP = 1.0, Dmg = 1.0, Fire = 1.0, Hit = 12, Crit = 10, Wand = 1.5, Armor = 0.01, DPS = 0.1 },
+            { name = "Frost",  Sta = 0.35, Int = 0.7, Spi = 0.6, SP = 1.0, Dmg = 1.0, Frost = 1.0, Hit = 12, Crit = 8,  Wand = 1.5, Armor = 0.01, DPS = 0.1 },
         } },
         WARLOCK = { default = 1, trees = {
-            { name = "Affliction",  Sta = 0.4, Int = 0.5, Spi = 0.5, SP = 1.0, Dmg = 1.0, Hit = 12, Crit = 8,  Wand = 1.5, Armor = 0.01, DPS = 0.1 },
-            { name = "Demonology",  Sta = 0.4, Int = 0.5, Spi = 0.5, SP = 1.0, Dmg = 1.0, Hit = 10, Crit = 5,  Wand = 1.5, Armor = 0.01, DPS = 0.1 },
-            { name = "Destruction", Sta = 0.4, Int = 0.5, Spi = 0.5, SP = 1.0, Dmg = 1.0, Hit = 12, Crit = 10, Wand = 1.5, Armor = 0.01, DPS = 0.1 },
+            { name = "Affliction",  Sta = 0.4, Int = 0.5, Spi = 0.5, SP = 1.0, Dmg = 1.0, Shadow = 1.0, Fire = 0.2, Hit = 12, Crit = 8,  Wand = 1.5, Armor = 0.01, DPS = 0.1 },
+            { name = "Demonology",  Sta = 0.4, Int = 0.5, Spi = 0.5, SP = 1.0, Dmg = 1.0, Shadow = 1.0, Fire = 0.2, Hit = 10, Crit = 5,  Wand = 1.5, Armor = 0.01, DPS = 0.1 },
+            { name = "Destruction", Sta = 0.4, Int = 0.5, Spi = 0.5, SP = 1.0, Dmg = 1.0, Shadow = 0.9, Fire = 0.4, Hit = 12, Crit = 10, Wand = 1.5, Armor = 0.01, DPS = 0.1 },
         } },
         SHAMAN = { default = 2, trees = {
-            { name = "Elemental",   Sta = 0.3, Int = 0.7, Spi = 0.2, SP = 1.0, Dmg = 1.0, Hit = 10, Crit = 10, Armor = 0.01, DPS = 0.1 },
+            { name = "Elemental",   Sta = 0.3, Int = 0.7, Spi = 0.2, SP = 1.0, Dmg = 1.0, Nature = 1.0, Fire = 0.3, Hit = 10, Crit = 10, Armor = 0.01, DPS = 0.1 },
             { name = "Enhancement", Str = 1.0, Agi = 0.6, Sta = 0.3, Int = 0.9, AP = 0.5, SP = 0.1, Dmg = 0.1, Hit = 11, Crit = 11, Armor = 0.01, DPS = 3.5 },
             { name = "Restoration", Sta = 0.3, Int = 0.9, Spi = 0.3, SP = 1.0, Heal = 1.0, Crit = 6, Armor = 0.01, DPS = 0.1 },
         } },
         DRUID = { default = 2, trees = {
-            { name = "Balance",      Sta = 0.3, Int = 0.7, Spi = 0.4, SP = 1.0, Dmg = 1.0, Hit = 10, Crit = 8, Armor = 0.01, DPS = 0.1 },
+            { name = "Balance",      Sta = 0.3, Int = 0.7, Spi = 0.4, SP = 1.0, Dmg = 1.0, Arcane = 0.7, Nature = 0.5, Hit = 10, Crit = 8, Armor = 0.01, DPS = 0.1 },
             { name = "Feral Combat", Str = 1.0, Agi = 0.9, Sta = 0.5, AP = 0.55, Hit = 10, Crit = 10, Armor = 0.05, DPS = 3.5 },
             { name = "Restoration",  Sta = 0.3, Int = 1.0, Spi = 0.8, SP = 1.0, Heal = 1.0, Crit = 6, Armor = 0.01, DPS = 0.1 },
         } },

@@ -8,6 +8,10 @@
 --
 -- Changelog
 -- ---------
+-- v0.10.17: E21 (Peter, 8 Nov): Resolver.IsDefaultToolID and
+--   Resolver.GetDefaultToolIDs give the Upgrade Advisor the default tool
+--   list for its default Ignored list. Whitelist removals do not count:
+--   the whitelist is for the swap, Ignored for the Upgrade Advisor.
 -- v0.10.16: E15b (Peter, 5 Nov test): Recent Loot keeps 25 rows PER
 --   character (max 250 for all together). The old shared limit of 25
 --   let one character's loot push out another's (audit O33).
@@ -303,7 +307,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_RESOLVER = "0.10.16"
+LOF.VERSION_RESOLVER = "0.10.17"
 
 local Resolver = {}
 LOF.Resolver = Resolver
@@ -416,6 +420,25 @@ end
 local function IsDefaultTool(itemID)
     return itemID ~= nil and (DEFAULT_TOOLS[itemID] == true or IsAmmo(itemID))
         and not GetRemovedDefaults()[itemID]
+end
+
+-- v0.10.17 (E21): the default tool list itself, for the Upgrade Advisor's
+-- default Ignored list. Whitelist removals do not count here.
+function Resolver.IsDefaultToolID(itemID)
+    return itemID ~= nil and DEFAULT_TOOLS[itemID] == true
+end
+
+-- Only items the running client knows; names are requested when missing
+-- (GET_ITEM_INFO_RECEIVED refreshes).
+function Resolver.GetDefaultToolIDs()
+    local ids = {}
+    for itemID in pairs(DEFAULT_TOOLS) do
+        if ItemExistsInClient(itemID) then
+            ids[#ids + 1] = itemID
+            if not LOF.GetItemInfo(itemID) then RequestItemData(itemID) end
+        end
+    end
+    return ids
 end
 
 -- v0.6.2: itemID for a whitelist entry stored by name (nil if the

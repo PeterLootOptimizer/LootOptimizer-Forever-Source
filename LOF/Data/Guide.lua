@@ -7,6 +7,8 @@
 --
 -- Changelog
 -- ---------
+-- v0.9.0: What's new 1.6.7 "Shadow Damage counts & no advice for tools"
+--   (Peter, 8 Nov).
 -- v0.8.0: What's new 1.6.6 "Fairer upgrade advice & Recent Loot per
 --   character" (Peter, 4 Nov).
 -- v0.7.0: What's new 1.6.5 "Spell Damage and Spell Healing count" (Peter,
@@ -47,7 +49,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_DATA_GUIDE = "0.8.0"
+LOF.VERSION_DATA_GUIDE = "0.9.0"
 
 LOF.Data = LOF.Data or {}
 
@@ -94,6 +96,14 @@ LOF.Data.Guide = {
     },
 
     whatsNew = {
+        {
+            version = "1.6.7",
+            title = "Shadow Damage counts & no advice for tools",
+            items = {
+                { color = "green", text = "[green]Damage for one school[/] (for example +3 Shadow Damage) now counts for the specs that use it: Shadow Priest, Warlock, Mage, Balance, Elemental, Retribution and Protection Paladin. Stat weights 0.2.6 (beta)." },
+                { color = "white", text = "The Upgrade Advisor no longer suggests your Skinning Knife, Mining Pick, fishing poles or other tools. They are on the Ignored list as \"default\"; click one there to get advice for it again." },
+            },
+        },
         {
             version = "1.6.6",
             title = "Fairer upgrade advice & Recent Loot per character",
