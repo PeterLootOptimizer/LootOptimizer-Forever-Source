@@ -10,7 +10,7 @@ Bags full while looting? LOF compares the loot with the cheapest item in your ba
 
 ## What is in this repository
 
-The folder `LOF/` is exactly what is in the release ZIP on CurseForge. This repository holds **released versions only**; development happens elsewhere. The current version is **1.6.7**.
+The folder `LOF/` is exactly what is in the release ZIP on CurseForge. This repository holds **released versions only**; development happens elsewhere. The current version is **1.6.8**.
 
 Inside `LOF/`, `README.md` describes every file and its role. The code is plain Lua 5.1, split into layers: `Resolver*.lua` (all decisions), `UI*.lua` (display only), `Capture.lua` (game events) and `Data/` (reference data such as the stat weights).
 
