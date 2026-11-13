@@ -7,6 +7,10 @@
 --
 -- Changelog
 -- ---------
+-- v0.10.2: audit 1.6.8: disenchant details text matches the behaviour.
+-- v0.10.1: What's new 1.6.8: + disenchant details setting (Yivry).
+-- v0.10.0: What's new 1.6.8 "Upgrade button, fishing & full names"
+--   (Peter, 12 Nov), with credits to Silentspy, Tim and CurseForge players.
 -- v0.9.0: What's new 1.6.7 "Shadow Damage counts & no advice for tools"
 --   (Peter, 8 Nov).
 -- v0.8.0: What's new 1.6.6 "Fairer upgrade advice & Recent Loot per
@@ -49,7 +53,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_DATA_GUIDE = "0.9.0"
+LOF.VERSION_DATA_GUIDE = "0.10.2"
 
 LOF.Data = LOF.Data or {}
 
@@ -96,6 +100,18 @@ LOF.Data.Guide = {
     },
 
     whatsNew = {
+        {
+            version = "1.6.8",
+            title = "Upgrade button, fishing & full names",
+            items = {
+                { color = "gold", text = "[gold]Upgrade available button[/] (new setting): instead of the popup, upgrades wait behind a small button below the minimap. Click it when it suits you; < and > show the other upgrades. Settings > Upgrade Advisor. Thanks to the players on CurseForge who asked for it." },
+                { color = "green", text = "[green]Fishing:[/] with a fishing pole in your hand, LOF compares weapons with the weapon you held before, not with the pole. Your weapon in your bags stays protected while you fish. Thanks to Silentspy." },
+                { color = "white", text = "An upgrade for later (for example mail for a Hunter at level 40) is only suggested within 5 levels. Then LOF compares it with what you wear at that time. Thanks to Tim." },
+                { color = "white", text = "Full character names everywhere, and each character has its own Ignored list, also when two of your characters share a first name. Thanks to Tim." },
+                { color = "orange", text = "[orange]ALT UPGRADE[/] says \"(train Staves)\" when the alt still has to learn that weapon at the trainer. Those alts are listed after the ones that can use it now. Thanks to Tim." },
+                { color = "white", text = "New setting under Settings > Values > Disenchant: [gold]Show disenchant details in tooltips[/]. Off: no materials or other disenchant lines in tooltips, only the value LOF uses for an item in your bags. Thanks to Yivry." },
+            },
+        },
         {
             version = "1.6.7",
             title = "Shadow Damage counts & no advice for tools",

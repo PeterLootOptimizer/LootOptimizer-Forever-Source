@@ -8,6 +8,68 @@
 --
 -- Changelog
 -- ---------
+-- v0.13.20: audit 1.6.8 (final): no own Ignored list is stored while the
+--   name is not known yet ("Unknown" at early login): a temporary list is
+--   used, so no shared "Unknown-Realm" list can appear. Alts that still
+--   have to train a weapon type sort after alts that can use it now (alt
+--   list and Send to alts), as "at level" does.
+-- v0.13.19: E28 (Tim's mail, 11 Nov): a weapon type the class can learn
+--   but the character has not trained still counts, with needTraining =
+--   the skill name ("Staves"): alts by the stored weaponSkills (Holdings;
+--   not stored yet = class rule as before), you when the only red line in
+--   the tooltip is the weapon type and IsPlayerSpell says untrained. For
+--   you it works like "at level": tooltip line and swap protection, no
+--   popup. RedLineInfo also returns the number of other red lines.
+-- v0.13.18: E26 (Peter, 11 Nov): advice for an alt also respects that
+--   alt's OWN Ignored list (what Huntrix ignored is never offered for
+--   Huntrix while you play Priestly): EvaluateForAlts checks it next to
+--   the per-alt ignores. A list not yet moved to the full name (E25) is
+--   read under the first name.
+-- v0.13.17: E25 (found 11 Nov with Tim's mail): the own Ignored list is
+--   kept per full name ("First Last-Realm"); it was the first name only,
+--   so alts with the same first name shared one list. Migration: a
+--   character without a list under its full name gets a COPY of the old
+--   first-name list (two alts with that first name both keep it; nothing
+--   lost). Remove from LOF clears the full-name list only (the old one may
+--   still be needed by another character with that first name).
+-- v0.13.16: audit 1.6.8: fail safe while fishing - when the real weapon is
+--   unknown or no longer in the bags, every weapon in the bags is
+--   protected from Swap and Make room (agreement 5).
+-- v0.13.15: E24 (Peter, 10 Nov: a level 1 mail bracer "+66.7% at level
+--   40" for a level 5 Hunter alt): an upgrade for later (alt: armor or
+--   weapon rule by level; you: "Requires Level") only counts within
+--   StatProfiles.futureUpgradeLevels (5) levels. Closer to that level LOF
+--   compares with what is worn then, so outgrown items drop out by
+--   themselves. Tooltip, popups, Send to alts and swap protection alike.
+-- v0.13.14: F17 (Peter's test, 9 Nov: two identical upgrades, > stuck):
+--   every waiting entry gets its own bag slot (entry.bag / entry.slot):
+--   exact link first, otherwise a slot with that item that no other entry
+--   uses. Two identical items stay two upgrades, and the popup opens the
+--   copy the player selected.
+-- v0.13.13: F17 (Peter, 9 Nov): Upgrade.GetWaitingList replaces
+--   PickFirstWaiting: all waiting upgrades for the button, in its order
+--   (same rule), each with icon, quality, kind (SELF / ALT) and bag slot,
+--   so the button can show the item and browse with < and >.
+-- v0.13.12: F17 (Peter, 9 Nov): Upgrade.PickFirstWaiting: the button
+--   shows your own upgrades before an alt's, and the largest gain first
+--   (an empty slot counts as largest). Two upgrades for one slot: you see
+--   the better one first; after Equip the other is no longer an upgrade
+--   and drops off the button by itself.
+-- v0.13.11: F17 (Peter, 9 Nov; CurseForge request): setting "Show an
+--   'Upgrade available' button instead of the popup" (account wide,
+--   LOF.db.upgradeButtonMode, default off; in GetAdvisorSettings as
+--   buttonMode). Upgrade.GetPromptVerdict(entry): the one "is this queued
+--   item still worth a popup" check, used by Capture for the popup and for
+--   the count on the button.
+-- v0.13.10: E23 (Peter, 9 Nov; idea and first patch by Silentspy): a
+--   fishing pole in the main hand is never the weapon to compare with.
+--   While fishing, the weapon slots compare with the weapons last held
+--   without a pole (Holdings realWeapons), for you and for alts, but
+--   only while that weapon is still in the bags. Unknown or gone: no
+--   advice for the weapon slots (NOT_BETTER), a tooltip notice, and one
+--   chat line per weapon and session when it is gone. While fishing the
+--   real weapon in the bags is protected from Swap and Make room.
+--   IsFishingPoleLink is the one pole check (also Upgrade.IsFishing).
 -- v0.13.9: E21 (Peter, 8 Nov): default Ignored list. Default tools from
 --   Resolver.lua that are weapons (Skinning Knife, Mining Pick, fishing
 --   poles, Blacksmith Hammer ...) get no upgrade advice for any character
@@ -262,7 +324,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_RESOLVER_UPGRADE = "0.13.9"
+LOF.VERSION_RESOLVER_UPGRADE = "0.13.20"
 
 local Upgrade = {}
 LOF.Resolver.Upgrade = Upgrade
@@ -325,7 +387,8 @@ local settingsVersion = 0   -- bumped with the ignore version (below)
 
 local function CurrentFullName()
     local name, last = UnitName("player")
-    if not name or name == "" then return nil end
+    -- v0.13.20: "Unknown" at early login is not a name
+    if not name or name == "" or name == _G.UNKNOWNOBJECT then return nil end
     if type(last) == "string" and last ~= "" then return name .. " " .. last end
     return name
 end
@@ -379,10 +442,22 @@ function Upgrade.SetAltMailAutoOpen(enabled)
     settingsVersion = settingsVersion + 1
 end
 
+-- v0.13.11 (F17): "Upgrade available" button instead of the popup
+-- (account wide, default off).
+function Upgrade.IsButtonMode()
+    return LOF.db.upgradeButtonMode == true
+end
+
+function Upgrade.SetButtonMode(enabled)
+    LOF.db.upgradeButtonMode = enabled and true or nil
+    settingsVersion = settingsVersion + 1
+end
+
 -- Snapshot for the Settings page.
 function Upgrade.GetAdvisorSettings()
     local snap = { name = CurrentFullName(), enabled = Upgrade.IsEnabled(), alts = {},
-        mailAutoOpen = Upgrade.IsAltMailAutoOpen() }
+        mailAutoOpen = Upgrade.IsAltMailAutoOpen(),
+        buttonMode = Upgrade.IsButtonMode() }   -- v0.13.11 (F17)
     local H = LOF.Resolver.Holdings
     for _, c in ipairs((H and H.GetCharacters and H.GetCharacters()) or {}) do
         if not c.isCurrent then
@@ -396,8 +471,29 @@ function Upgrade.GetAdvisorSettings()
 end
 
 local WEAPON_CLASS_ID = (_G.Enum and _G.Enum.ItemClass and _G.Enum.ItemClass.Weapon) or 2
+-- v0.12.0: fishing pole = weapon class 2, subclass 20 (moved up, v0.13.10)
+local FISHING_POLE_SUBCLASS = (_G.Enum and _G.Enum.ItemWeaponSubclass
+    and _G.Enum.ItemWeaponSubclass.Fishingpole) or 20
 
+-- v0.13.10 (E23): the one fishing pole check (link or itemID; any pole,
+-- also one removed from the Ignored list: holding a pole means fishing).
+local function IsFishingPoleLink(item)
+    if not item then return false end
+    local _, _, _, _, _, classID, subclassID = LOF.GetItemInfoInstant(item)
+    return classID == WEAPON_CLASS_ID and subclassID == FISHING_POLE_SUBCLASS
+end
+
+function Upgrade.IsFishingPoleLink(item)   -- for Holdings
+    return IsFishingPoleLink(item)
+end
+
+-- v0.13.17 (E25): full name ("First Last") + realm
 local function GetCharKey()
+    return tostring(CurrentFullName() or "?") .. "-" .. tostring(GetRealmName() or "?")
+end
+
+-- Before v0.13.17: first name only (shared by alts with the same first name)
+local function GetOldCharKey()
     return tostring(UnitName("player") or "?") .. "-" .. tostring(GetRealmName() or "?")
 end
 
@@ -405,9 +501,35 @@ local ignoreVersion = 0   -- v0.7.4: bumped on every ignore / unignore
 
 local function GetIgnoredTable()
     LOF.db.ignoredUpgrades = LOF.db.ignoredUpgrades or {}
+    local all = LOF.db.ignoredUpgrades
+    -- v0.13.20: no name yet: a temporary list, nothing stored
+    if not CurrentFullName() then return {} end
     local key = GetCharKey()
-    LOF.db.ignoredUpgrades[key] = LOF.db.ignoredUpgrades[key] or {}
-    return LOF.db.ignoredUpgrades[key]
+    if not all[key] then
+        all[key] = {}
+        -- v0.13.17 (E25): a copy of the old first-name list, once
+        local old = GetOldCharKey()
+        if old ~= key and type(all[old]) == "table" then
+            for itemID, e in pairs(all[old]) do
+                all[key][itemID] = (type(e) == "table") and { name = e.name, time = e.time } or e
+            end
+        end
+    end
+    return all[key]
+end
+
+-- v0.13.18 (E26): is this item on that character's OWN Ignored list?
+-- name = full name; a list not yet moved (E25) sits under the first name.
+local function IsOnOwnListOf(itemID, name)
+    local all = LOF.db.ignoredUpgrades
+    if not itemID or not name or type(all) ~= "table" then return false end
+    local realm = tostring(GetRealmName() or "?")
+    local list = all[tostring(name) .. "-" .. realm]
+    if list == nil then
+        local first = tostring(name):match("^(%S+)")
+        list = first and all[first .. "-" .. realm]
+    end
+    return type(list) == "table" and list[itemID] ~= nil
 end
 
 -- v0.13.9 (E21): default Ignored list, account wide: the default tools
@@ -497,10 +619,9 @@ function Upgrade.ForgetCharacter(name)
             if next(e.chars) == nil then GetAltIgnores()[itemID] = nil end
         end
     end
-    -- ignored upgrades are keyed "First-Realm" (GetCharKey)
-    local first = tostring(name):match("^(%S+)")
-    if first and type(LOF.db.ignoredUpgrades) == "table" then
-        LOF.db.ignoredUpgrades[first .. "-" .. tostring(GetRealmName() or "?")] = nil
+    -- v0.13.17 (E25): ignored upgrades are keyed "First Last-Realm" (GetCharKey)
+    if type(LOF.db.ignoredUpgrades) == "table" then
+        LOF.db.ignoredUpgrades[tostring(name) .. "-" .. tostring(GetRealmName() or "?")] = nil
     end
     settingsVersion = settingsVersion + 1
     ignoreVersion = ignoreVersion + 1
@@ -968,7 +1089,73 @@ end
 -- -------------------------------------------------------------
 -- Comparison against one equipped slot
 -- -------------------------------------------------------------
+-- v0.13.10 (E23): the weapon slots to compare with while a fishing pole
+-- is in the main hand. main / off = held now; real = { [16], [17] } last
+-- held without a pole (nil: never seen); inBags(link) -> the link as it
+-- lies in the bags now, or nil. Returns the links to compare with for
+-- 16 and 17 and a status: nil (not fishing), "ok", "unknown" or
+-- "missing" (+ the missing link). A slot that cannot be resolved gets
+-- the pole itself: CompareToSlot never compares with a pole.
+local function ResolveWeaponBase(main, off, real, inBags)
+    if not IsFishingPoleLink(main) then return main, off, nil end
+    if type(real) ~= "table" then return main, main, "unknown" end
+    local out, status, missing = {}, "ok", nil
+    for _, slot in ipairs({ 16, 17 }) do
+        local link = real[slot]
+        if link ~= nil then
+            local found = inBags(link)
+            if found then
+                out[slot] = found
+            else
+                out[slot] = main
+                status = "missing"
+                missing = missing or link
+            end
+        end
+    end
+    return out[16], out[17], status, missing
+end
+
+local weaponBaseCache = { t = nil }
+local warnedMissing = {}   -- one chat line per weapon per session
+
+local function PlayerWeaponBase()
+    local now = GetTime()
+    if weaponBaseCache.t == now then return weaponBaseCache.v end
+    local base = nil
+    local main = GetInventoryItemLink("player", 16)
+    if IsFishingPoleLink(main) then
+        local H = LOF.Resolver.Holdings
+        local real = H and H.GetRealWeapons and H.GetRealWeapons()
+        local m, o, status, missing = ResolveWeaponBase(main, GetInventoryItemLink("player", 17), real,
+            function(link)
+                local bag, slot = Upgrade.FindInBags(link, (LOF.GetItemInfoInstant(link)))
+                local c = bag and LOF.GetContainerItemInfo(bag, slot)
+                return c and c.hyperlink or nil
+            end)
+        base = { [16] = m, [17] = o, status = status }
+        if status == "missing" and missing and not warnedMissing[missing] then
+            warnedMissing[missing] = true
+            LOF.Print(missing .. " is no longer in your bags: no weapon advice while fishing."
+                .. " It returns when you equip a weapon.")
+        end
+    end
+    weaponBaseCache.t, weaponBaseCache.v = now, base
+    return base
+end
+
+-- v0.13.10 (E23): part of the protection and tooltip cache keys
+function Upgrade.GetWeaponBaseKey()
+    local base = PlayerWeaponBase()
+    if not base then return "-" end
+    return tostring(base[16]) .. "/" .. tostring(base[17]) .. "/" .. tostring(base.status)
+end
+
 local function PlayerSlotLink(slot)
+    if slot == 16 or slot == 17 then   -- v0.13.10 (E23)
+        local base = PlayerWeaponBase()
+        if base then return base[slot] end
+    end
     return GetInventoryItemLink("player", slot)
 end
 
@@ -1003,6 +1190,13 @@ local function CompareToSlot(newLink, equipLoc, targetSlot, mix, data, slotLink)
     if equipLoc == "INVTYPE_2HWEAPON" and targetSlot == 16 then
         offLink = slotLink(17)
         result.offHandLink = offLink
+    end
+
+    -- v0.13.10 (E23): a fishing pole is never what you compare with
+    -- (real weapon unknown or gone): no advice for this slot.
+    if IsFishingPoleLink(equippedLink) or IsFishingPoleLink(offLink) then
+        result.verdict = Upgrade.NOT_BETTER
+        return result
     end
 
     -- v0.13.4 (E4) fail safe: what is worn is not loaded -> never an upgrade
@@ -1102,6 +1296,29 @@ local function GetUsability(classFile)
     return u and u.classes and u.classes[classFile or ""]
 end
 
+-- v0.13.19 (E28): the skill name to train for this weapon subclass, or nil
+-- (no skill needed, already known, or not known whether it is known).
+local function TrainingNeeded(subclassID, known)
+    local data = LOF.Data and LOF.Data.StatProfiles
+    local s = data and data.weaponSkills and data.weaponSkills[subclassID or -1]
+    if not s or type(known) ~= "table" or known[subclassID] then return nil end
+    return s.name
+end
+
+-- v0.13.19 (E28): you: a weapon your class can learn but you have not
+-- trained -> skill name, else nil.
+local function SelfTrainingNeeded(link)
+    local _, _, _, _, _, classID, subclassID = LOF.GetItemInfoInstant(link)
+    if classID ~= WEAPON_CLASS_ID or not _G.IsPlayerSpell then return nil end
+    local _, classFile = UnitClass("player")
+    local u = GetUsability(classFile)
+    if not (u and u.weapons and u.weapons[subclassID or -1]) then return nil end
+    local data = LOF.Data and LOF.Data.StatProfiles
+    local s = data and data.weaponSkills and data.weaponSkills[subclassID]
+    if not s or _G.IsPlayerSpell(s.spell) then return nil end
+    return s.name
+end
+
 -- v0.13.6 (E17): set further down, after GetTooltipData.
 local AltClassAllowed
 
@@ -1123,7 +1340,8 @@ local function AltCanUse(profile, link)
     end
     if AltClassAllowed and not AltClassAllowed(profile, link) then return false end   -- v0.13.6 (E17)
     local minLevel = tonumber(select(5, LOF.GetItemInfo(link)) or 1) or 1
-    return true, math.max(need, minLevel)
+    local train = classID == WEAPON_CLASS_ID and TrainingNeeded(subclassID, profile.weaponSkills) or nil   -- v0.13.19
+    return true, math.max(need, minLevel), train
 end
 
 local function AltCanDualWield(profile)
@@ -1171,15 +1389,37 @@ local function BuildAltSlots(profile)
     return slots
 end
 
+-- v0.13.15 (E24): an upgrade for later only counts within this many
+-- levels (data layer); further away it is no advice and no protection.
+local function TooFarAhead(level, needLevel)
+    if not needLevel then return false end
+    local data = LOF.Data and LOF.Data.StatProfiles
+    local lead = tonumber(data and data.futureUpgradeLevels) or 5
+    return (tonumber(level) or 0) < (tonumber(needLevel) or 0) - lead
+end
+
 local function EvaluateForAlt(profile, link, equipLoc)
-    local usable, needLevel = AltCanUse(profile, link)
+    local usable, needLevel, needTraining = AltCanUse(profile, link)   -- v0.13.19
     if not usable then return nil end
+    if TooFarAhead(profile.level, needLevel) then return nil end   -- v0.13.15 (E24)
     local mix, basis, source, data = Upgrade.GetWeightMixFor(profile.class, profile.talents)
     if not mix then return nil end
     local targets = AltTargets(equipLoc, AltCanDualWield(profile))
     if not targets then return nil end
 
     local slots = BuildAltSlots(profile)
+    -- v0.13.10 (E23): an alt saved holding a fishing pole compares with
+    -- its real weapons (a copy; the stored profile is not changed).
+    if IsFishingPoleLink(slots[16]) then
+        local H = LOF.Resolver.Holdings
+        local m, o = ResolveWeaponBase(slots[16], slots[17], profile.realWeapons, function(link)
+            return H and H.CharHasInBags and H.CharHasInBags(profile.name, link) or nil
+        end)
+        local copy = {}
+        for k, v in pairs(slots) do copy[k] = v end
+        copy[16], copy[17] = m, o
+        slots = copy
+    end
     local function slotLink(slot) return slots[slot] end
     local best, pending
     for _, targetSlot in ipairs(targets) do
@@ -1193,6 +1433,7 @@ local function EvaluateForAlt(profile, link, equipLoc)
     return {
         name = profile.name, class = profile.class, className = profile.className,
         level = level, needLevel = needLevel, tooLow = level < needLevel,
+        needTraining = needTraining,   -- v0.13.19 (E28)
         percent = best.percent,
         emptySlot = best.equippedLink == nil and best.offHandLink == nil,
         basis = basis, source = source,
@@ -1205,6 +1446,7 @@ end
 -- Usable now first, then empty slots, then the largest percentage.
 local function SortAlts(a, b)
     if a.tooLow ~= b.tooLow then return not a.tooLow end
+    if (a.needTraining ~= nil) ~= (b.needTraining ~= nil) then return a.needTraining == nil end   -- v0.13.20
     if a.emptySlot ~= b.emptySlot then return a.emptySlot end
     local pa, pb = a.percent or 0, b.percent or 0
     if pa ~= pb then return pa > pb end
@@ -1225,7 +1467,8 @@ function Upgrade.EvaluateForAlts(link, profiles)
     if not (equipLoc and SLOTS[equipLoc]) or IsExcludedFromAdvice(link) then return list end
     for _, profile in ipairs(profiles) do
         if Upgrade.IsAltEnabled(profile.name)                     -- v0.9.0
-            and not Upgrade.IsIgnoredFor(itemID, profile.name) then   -- v0.8.0
+            and not Upgrade.IsIgnoredFor(itemID, profile.name)   -- v0.8.0
+            and not IsOnOwnListOf(itemID, profile.name) then   -- v0.13.18 (E26)
             local entry, pending = EvaluateForAlt(profile, link, equipLoc)
             if entry then list[#list + 1] = entry end
             if pending then list.pending = true end   -- v0.13.4 (E4)
@@ -1356,6 +1599,7 @@ end
 
 local function SortMailItems(a, b)
     if a.tooLow ~= b.tooLow then return not a.tooLow end
+    if (a.needTraining ~= nil) ~= (b.needTraining ~= nil) then return a.needTraining == nil end   -- v0.13.20
     if a.emptySlot ~= b.emptySlot then return a.emptySlot end
     local pa, pb = a.percent or 0, b.percent or 0
     if pa ~= pb then return pa > pb end
@@ -1408,6 +1652,7 @@ function Upgrade.GetAltMailSnapshot()
                         icon = c.iconFileID, count = c.stackCount,
                         percent = a.percent, emptySlot = a.emptySlot,
                         tooLow = a.tooLow, needLevel = a.needLevel,
+                        needTraining = a.needTraining,   -- v0.13.19 (E28)
                         replacesLink = a.replacesLink, replacesOffLink = a.replacesOffLink,
                         statRows = a.comparison and a.comparison.statRows or {},   -- v0.13.3
                         altName = a.name, action = action,
@@ -1449,7 +1694,7 @@ end
 
 local function RedLineInfo(data)
     if type(data) ~= "table" or type(data.lines) ~= "table" then return nil end
-    local anyRed, levelOnly, needLevel = false, true, nil
+    local anyRed, levelOnly, needLevel, otherRed = false, true, nil, 0
     local pattern = GetLevelPattern()
     for _, line in ipairs(data.lines) do
         for _, side in ipairs({ { line.leftText, line.leftColor }, { line.rightText, line.rightColor } }) do
@@ -1461,11 +1706,12 @@ local function RedLineInfo(data)
                     needLevel = tonumber(lvl)
                 else
                     levelOnly = false
+                    otherRed = otherRed + 1   -- v0.13.19 (E28)
                 end
             end
         end
     end
-    return anyRed, anyRed and levelOnly or false, needLevel
+    return anyRed, anyRed and levelOnly or false, needLevel, otherRed
 end
 
 local function GetTooltipData(link, bag, slot)
@@ -1571,6 +1817,7 @@ function Upgrade.GetTooltipInfo(link, bag, slot)
     local version = tostring(H and H.GetDataVersion and H.GetDataVersion()) .. ":"
         .. Upgrade.GetIgnoreVersion() .. ":" .. tostring(UnitLevel("player"))
         .. ":" .. itemData.epoch   -- v0.13.4 (E4)
+        .. ":" .. Upgrade.GetWeaponBaseKey()   -- v0.13.10 (E23)
     if tooltipCache.version ~= version then
         tooltipCache.version = version
         tooltipCache.entries = {}
@@ -1583,21 +1830,34 @@ function Upgrade.GetTooltipInfo(link, bag, slot)
     local _, _, _, equipLoc = LOF.GetItemInfoInstant(link)
 
     -- for you (v0.10.1: a level requirement alone does not stop it)
-    local anyRed, levelOnly, needLevel = RedLineInfo(GetTooltipData(link, bag, slot))
+    local anyRed, levelOnly, needLevel, otherRed = RedLineInfo(GetTooltipData(link, bag, slot))
     local targets = GetTargetSlots(equipLoc)
-    if anyRed ~= nil and (not anyRed or levelOnly) and targets then
+    -- v0.13.19 (E28): the only other red line is an untrained weapon type
+    local train = anyRed and otherRed == 1 and SelfTrainingNeeded(link) or nil
+    if anyRed ~= nil and (not anyRed or levelOnly or train) and targets
+        and not (anyRed and TooFarAhead(UnitLevel("player"), needLevel)) then   -- v0.13.15 (E24)
         local mix, _, _, data = Upgrade.GetWeightMix()
         local best
         for _, targetSlot in ipairs(targets) do
             local r = CompareToSlot(link, equipLoc, targetSlot, mix, data)
             if IsBetter(r, best) then best = r end
         end
+        -- v0.13.10 (E23): fishing without a known real weapon: say why
+        local base = PlayerWeaponBase()
+        local weaponSlot = false
+        for _, t in ipairs(targets) do if t == 16 or t == 17 then weaponSlot = true end end
+        if base and weaponSlot and base.status == "missing" then
+            info.notice = "LOF: no weapon advice while fishing - a weapon you held is not in your bags."
+        elseif base and weaponSlot and base.status == "unknown" then
+            info.notice = "LOF: no weapon advice while fishing - equip your weapon once."
+        end
         if best and best.verdict == Upgrade.UPGRADE_CLEAR then
             info.self = {
                 percent = best.percent,
                 emptySlot = best.equippedLink == nil and best.offHandLink == nil,
                 rows = best.statRows or {},
-                tooLow = levelOnly and needLevel ~= nil, needLevel = needLevel,
+                tooLow = needLevel ~= nil and anyRed and true or false, needLevel = needLevel,
+                needTraining = train,   -- v0.13.19 (E28)
             }
         end
     end
@@ -1692,8 +1952,11 @@ function Upgrade.Evaluate(bag, slot)
     if TooltipHasRedLine(bag, slot) then
         verdict.verdict = Upgrade.NOT_USABLE
         -- v0.10.2: only the level stops you -> remember it for later
-        local anyRed, levelOnly, needLevel = RedLineInfo(GetTooltipData(link, bag, slot))
-        if anyRed and levelOnly and needLevel then
+        local anyRed, levelOnly, needLevel, otherRed = RedLineInfo(GetTooltipData(link, bag, slot))
+        -- v0.13.19 (E28): or the only other red line is an untrained weapon type
+        local train = anyRed and otherRed == 1 and SelfTrainingNeeded(link) or nil
+        if anyRed and ((levelOnly and needLevel) or train)
+            and not TooFarAhead(UnitLevel("player"), needLevel) then   -- v0.13.15 (E24)
             local mix, _, _, data = Upgrade.GetWeightMix()
             local best
             for _, targetSlot in ipairs(targets) do
@@ -1704,6 +1967,7 @@ function Upgrade.Evaluate(bag, slot)
             if best and best.verdict == Upgrade.UPGRADE_CLEAR then
                 verdict.futureSelf = {
                     percent = best.percent, needLevel = needLevel,
+                    needTraining = train,   -- v0.13.19 (E28)
                     emptySlot = best.equippedLink == nil and best.offHandLink == nil,
                 }
             end
@@ -1850,12 +2114,23 @@ function Upgrade.GetProtectionKey()
     local gear = H and H.GetGearVersion and H.GetGearVersion() or 0
     return tostring(gear) .. ":" .. Upgrade.GetIgnoreVersion() .. ":" .. tostring(UnitLevel("player"))
         .. ":" .. itemData.epoch   -- v0.13.4 (E4)
+        .. ":" .. Upgrade.GetWeaponBaseKey()   -- v0.13.10 (E23)
 end
 
 function Upgrade.IsProtectedBagItem(bag, slot)
     if not Upgrade.IsEnabled() then return false end
     local c = LOF.GetContainerItemInfo(bag, slot)
     if not c or not c.hyperlink or not Upgrade.IsGearLink(c.hyperlink) then return false end
+    -- v0.13.10 (E23): while fishing, your real weapon in the bags is kept
+    local base = PlayerWeaponBase()
+    if base and (c.hyperlink == base[16] or c.hyperlink == base[17]) then return true end
+    -- v0.13.16: real weapon unknown or gone: keep every weapon (fail safe)
+    if base and base.status ~= "ok" then
+        local targets = GetTargetSlots(select(4, LOF.GetItemInfoInstant(c.hyperlink)))
+        for _, t in ipairs(targets or {}) do
+            if t == 16 or t == 17 then return true end
+        end
+    end
     -- v0.12.0: protection does not depend on session / fishing
     local verdict = Upgrade.Evaluate(bag, slot)
     -- v0.13.4 (E4) fail safe: a comparison stopped on missing data -> protected
@@ -1894,15 +2169,79 @@ function Upgrade.WasAdvised(itemID)
     return itemID ~= nil and advisedThisSession[itemID] == true
 end
 
--- v0.12.0: fishing pole in the main hand (weapon class 2, subclass 20)
-local FISHING_POLE_SUBCLASS = (_G.Enum and _G.Enum.ItemWeaponSubclass
-    and _G.Enum.ItemWeaponSubclass.Fishingpole) or 20
-
+-- v0.12.0: fishing pole in the main hand (v0.13.10: IsFishingPoleLink)
 function Upgrade.IsFishing()
-    local id = GetInventoryItemID("player", 16)
-    if not id then return false end
-    local _, _, _, _, _, classID, subclassID = LOF.GetItemInfoInstant(id)
-    return classID == 2 and subclassID == FISHING_POLE_SUBCLASS
+    return IsFishingPoleLink(GetInventoryItemID("player", 16))
+end
+
+-- v0.13.11 (F17): a queued item { link, itemID, force } that is still in
+-- the bags and still worth a popup -> its verdict, else nil.
+function Upgrade.GetPromptVerdict(entry)
+    if not entry then return nil end
+    local bag, slot
+    -- v0.13.14: the slot assigned by GetWaitingList, while it still holds it
+    if entry.bag and entry.slot then
+        local c = LOF.GetContainerItemInfo(entry.bag, entry.slot)
+        if c and c.itemID == entry.itemID then bag, slot = entry.bag, entry.slot end
+    end
+    if not bag then bag, slot = Upgrade.FindInBags(entry.link, entry.itemID) end
+    if not bag then return nil end
+    local verdict = Upgrade.Evaluate(bag, slot)
+    if Upgrade.ShouldPrompt(verdict, entry.force) then return verdict end
+    return nil
+end
+
+-- v0.13.13 (F17): the waiting (not yet asked) queue entries for the
+-- button, in the order it shows them: your own before an alt's, then the
+-- largest gain (an empty slot counts as largest). Each item: { entry,
+-- link, itemID, icon, quality, kind = "SELF" | "ALT", bag, slot }.
+-- DEBT(dup): own bag scan next to Upgrade.FindInBags (O42)
+function Upgrade.GetWaitingList(entries)
+    -- v0.13.14: one bag slot per entry (exact link first, then a free
+    -- slot with the same item), so identical items stay apart.
+    local byLink, byID, used = {}, {}, {}
+    for bag = 0, LOF.GetLastBagIndex() do
+        for slot = 1, LOF.GetContainerNumSlots(bag) do
+            local c = LOF.GetContainerItemInfo(bag, slot)
+            if c and c.hyperlink and c.itemID then
+                local key = bag .. ":" .. slot
+                byLink[c.hyperlink] = byLink[c.hyperlink] or {}
+                table.insert(byLink[c.hyperlink], { bag, slot, key })
+                byID[c.itemID] = byID[c.itemID] or {}
+                table.insert(byID[c.itemID], { bag, slot, key })
+            end
+        end
+    end
+    local function take(candidates)
+        for _, s in ipairs(candidates or {}) do
+            if not used[s[3]] then used[s[3]] = true return s[1], s[2] end
+        end
+    end
+    for _, e in ipairs(entries or {}) do
+        local bag, slot = take(byLink[e.link])
+        if not bag then bag, slot = take(byID[e.itemID]) end
+        e.bag, e.slot = bag, slot
+    end
+
+    local list = {}
+    for _, e in ipairs(entries or {}) do
+        if not e.asked and e.bag then
+            local v = Upgrade.GetPromptVerdict(e)
+            if v then
+                list[#list + 1] = {
+                    entry = e, link = v.link, itemID = v.itemID, icon = v.icon, quality = v.quality,
+                    kind = (v.popupKind == "ALT") and "ALT" or "SELF", bag = v.bag, slot = v.slot,
+                    gain = tonumber(v.percent) or math.huge,   -- empty slot
+                }
+            end
+        end
+    end
+    table.sort(list, function(a, b)
+        if a.kind ~= b.kind then return a.kind == "SELF" end
+        if a.gain ~= b.gain then return a.gain > b.gain end
+        return tostring(a.link) < tostring(b.link)
+    end)
+    return list
 end
 
 -- The item is worth advice at all (also the swap protection rule).

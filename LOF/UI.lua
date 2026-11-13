@@ -7,6 +7,19 @@
 --
 -- Changelog
 -- ---------
+-- v1.17.33: Yivry (13 Nov): disenchant lines in tooltips only when the
+--   resolver says so (info.de.details; Settings > Values).
+-- v1.17.32: E28: "(train Staves)" next to "at level X" wherever an
+--   upgrade for later is shown (tooltip for you and alts, alt lines in the
+--   popup, "For you" line); the resolver gives needTraining.
+-- v1.17.31: the swap popup's "Alt upgrade" line shows the alt's full
+--   name (Tim, 11 Nov: alts with the same first name).
+-- v1.17.30: audit 1.6.8: switching the Upgrade Advisor off also hides the
+--   "Upgrade available" button right away (Capture.RefreshUpgradeButton).
+-- v1.17.29: F17: Kit.SavePosition (for UIUpgradeButton.lua); the version
+--   list names UIUpgradeButton.
+-- v1.17.28: E23: the item tooltip shows the resolver's notice (fishing
+--   without a known weapon) as a grey line.
 -- v1.17.27: E21: the Ignored list shows default entries (all characters)
 --   as "default" in the whitelist's blue; the resolver decides which.
 -- v1.17.26: Swap-family popup 30 px wider (SWAP_WIDTH 420) so the large
@@ -572,7 +585,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_UI = "1.17.27"
+LOF.VERSION_UI = "1.17.33"
 
 -- The .toc is the single source for the addon version.
 do
@@ -909,7 +922,7 @@ end
 -- block's own line).
 local function AddDisenchantLines(tip, v, noValueLine)
     local de = v and v.de
-    if not de then return end
+    if not de or not de.details then return end   -- v1.17.33
     if v.valueReason ~= "DE_USED" and not noValueLine then
         tip:AddLine(" ")   -- v1.10.4
         tip:AddDoubleLine("Disenchant value", GREY .. "~" .. LOF.FormatMoney(de.stack or de.each or 0) .. "|r",
@@ -1230,6 +1243,7 @@ UI.Kit = {
     CreateButton      = CreateButton,
     CreateDivider     = CreateDivider,
     RestorePosition   = RestorePosition,
+    SavePosition      = SavePosition,   -- v1.17.29 (F17)
     ApplyAutoScale    = ApplyAutoScale,
     HideTooltip       = HideTooltip,
     GetQualityRGB     = GetQualityRGB,
@@ -1326,7 +1340,8 @@ local VERSION_GROUPS = {   -- v1.17.16: per layer, alphabetical within a group
         { "Upgrade", "VERSION_RESOLVER_UPGRADE" }, { "Value", "VERSION_RESOLVER_VALUE" } } },
     { label = "UI", parts = { { "UI", "VERSION_UI" }, { "UIAltMail", "VERSION_UI_ALTMAIL" },
         { "UIGuide", "VERSION_UI_GUIDE" }, { "UIHoldings", "VERSION_UI_HOLDINGS" },
-        { "UIReagents", "VERSION_UI_REAGENTS" }, { "UISettings", "VERSION_UI_SETTINGS" } } },
+        { "UIReagents", "VERSION_UI_REAGENTS" }, { "UISettings", "VERSION_UI_SETTINGS" },
+        { "UIUpgradeButton", "VERSION_UI_UPGRADEBUTTON" } } },   -- v1.17.29 (F17)
     { label = "Data", parts = { { "DisenchantTable", "VERSION_DATA_DISENCHANTTABLE" },
         { "Guide", "VERSION_DATA_GUIDE" }, { "PriceRules", "VERSION_DATA_PRICERULES" },
         { "ProfessionRanks", "VERSION_DATA_PROFESSIONRANKS" },
@@ -1775,6 +1790,7 @@ end
 function UI.SetUpgradeAdvisor(enabled)
     Resolver.Upgrade.SetEnabled(enabled)
     if not enabled and UI.HideUpgradePopup then UI.HideUpgradePopup() end
+    if LOF.Capture.RefreshUpgradeButton then LOF.Capture.RefreshUpgradeButton() end   -- v1.17.30
     UI.Layout()
     LOF.RequestRefresh()   -- v1.12.0: Settings window
 end
@@ -2956,7 +2972,7 @@ function UI.ShowSwapPopup(d)
     elseif loot.isAltUpgrade then
         -- v1.8.2: who, and how much
         local a = loot.altUpgrade or {}
-        local who = tostring(a.name or "Alt"):match("^(%S+)") or "Alt"
+        local who = tostring(a.name or "Alt")   -- v1.17.31: full name
         lootValueText = GainText(a, ORANGE, "Alt upgrade", who)   -- v1.17.0
     elseif isReagent then
         lootValueText = TEAL .. "Reagent|r"
@@ -3419,6 +3435,9 @@ local function AltLineText(a)
     if a.tooLow then
         text = text .. GOLD .. "  at level " .. tostring(a.needLevel) .. "|r"
     end
+    if a.needTraining then   -- v1.17.32 (E28)
+        text = text .. GOLD .. "  train " .. tostring(a.needTraining) .. "|r"
+    end
     return text
 end
 
@@ -3771,7 +3790,8 @@ function UI.ShowUpgradePopup(v)
             f.selfLine:ClearAllPoints()
             f.selfLine:SetPoint("TOPLEFT", f, "TOPLEFT", x, y)
             f.selfLine:SetText(GOLD .. "For you:|r  " .. GREEN .. gain .. "|r" .. GOLD
-                .. "  at level " .. tostring(fs.needLevel) .. "|r")
+                .. (fs.needLevel and ("  at level " .. tostring(fs.needLevel)) or "")
+                .. (fs.needTraining and ("  train " .. tostring(fs.needTraining)) or "") .. "|r")   -- v1.17.32
             f.selfLine:Show()
             y = y - f.selfLine:GetStringHeight() - 8
         end
@@ -4163,6 +4183,7 @@ local function AltTooltipName(a)
     if a.tooLow then
         text = text .. " (at level " .. tostring(a.needLevel) .. ")"
     end
+    if a.needTraining then text = text .. " (train " .. tostring(a.needTraining) .. ")" end   -- v1.17.32
     return text
 end
 
@@ -4221,6 +4242,7 @@ local function AddUpgradeLines(tip, link, bag, slot)
     if info.self then
         local gain = GainText(info.self, "", "upgrade")   -- v1.17.4: the Kit helper
         if info.self.tooLow then gain = gain .. " (at level " .. tostring(info.self.needLevel) .. ")" end
+        if info.self.needTraining then gain = gain .. " (train " .. tostring(info.self.needTraining) .. ")" end   -- v1.17.32
         tip:AddLine(" ")   -- v1.17.17 (E5)
         tip:AddLine("LOF: upgrade for you " .. gain, 0.4, 1, 0.4, true)
         AddStatLines(tip, info.self.rows)
@@ -4233,6 +4255,11 @@ local function AddUpgradeLines(tip, link, bag, slot)
         tip:AddLine(" ")   -- v1.17.17 (E5)
         tip:AddLine("LOF: upgrade for", 1, 0.6, 0.2)
         AddAltLines(tip, info.alts, info.altRows)
+        added = true
+    end
+    if info.notice and not info.self then   -- v1.17.28 (E23)
+        if not added then tip:AddLine(" ") end
+        tip:AddLine(info.notice, 0.6, 0.6, 0.6, true)
         added = true
     end
     if added then tip:Show() end
@@ -4252,7 +4279,7 @@ local SKIP_GETTERS = { GetInventoryItem = true }
 local function AddLinkDisenchantLines(tip, link)
     if not Resolver.Value.IsDisenchantActive() then return end
     local v = Resolver.BuildItemInfo(link, 1)
-    if not v or not v.de then return end
+    if not v or not v.de or not v.de.details then return end   -- v1.17.33
     tip:AddLine(" ")
     tip:AddDoubleLine(GOLD .. "LOF:|r Disenchant value",
         DE_COLOR .. "~" .. LOF.FormatMoney(v.de.each or 0) .. "|r", 1, 1, 1, 1, 1, 1)

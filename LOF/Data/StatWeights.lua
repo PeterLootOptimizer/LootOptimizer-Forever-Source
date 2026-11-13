@@ -7,6 +7,11 @@
 --
 -- Changelog
 -- ---------
+-- v0.2.7: Blizzard hotfixes of 10 Nov 2026 (stat weights watch 11 Nov;
+--   Peter, 12 Nov). Enhancement Int 0.9 -> 0.7 (Mental Dexterity back to
+--   100% of Int as AP, the same rule and weight as v0.2.0), DPS 3.5 -> 3.3
+--   (Stormstrike back to 100%; Windfury Weapon and Totem now stack).
+--   Blizzard: Strength must be Enhancement's strongest stat.
 -- v0.2.6: E20 (CurseForge report 7 Nov, Peter 8 Nov): damage for one
 --   school counts. Measured on Forever (player's green chest): +3 Shadow
 --   Damage = ITEM_MOD_SHADOW_DAMAGE_DONE_SHORT 3; before, it counted 0.
@@ -96,14 +101,14 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_DATA_STATWEIGHTS = "0.2.6"
+LOF.VERSION_DATA_STATWEIGHTS = "0.2.7"
 
 LOF.Data = LOF.Data or {}
 
 LOF.Data.StatWeights = {
     meta = {
         version    = "v0.2",
-        date       = "2026-11-08",
+        date       = "2026-11-12",
         confidence = "beta",
         note       = "LOF's own weights; no published Forever weights exist yet.",
     },
@@ -188,7 +193,7 @@ LOF.Data.StatWeights = {
         } },
         SHAMAN = { default = 2, trees = {
             { name = "Elemental",   Sta = 0.3, Int = 0.7, Spi = 0.2, SP = 1.0, Dmg = 1.0, Nature = 1.0, Fire = 0.3, Hit = 10, Crit = 10, Armor = 0.01, DPS = 0.1 },
-            { name = "Enhancement", Str = 1.0, Agi = 0.6, Sta = 0.3, Int = 0.9, AP = 0.5, SP = 0.1, Dmg = 0.1, Hit = 11, Crit = 11, Armor = 0.01, DPS = 3.5 },
+            { name = "Enhancement", Str = 1.0, Agi = 0.6, Sta = 0.3, Int = 0.7, AP = 0.5, SP = 0.1, Dmg = 0.1, Hit = 11, Crit = 11, Armor = 0.01, DPS = 3.3 },   -- v0.2.7
             { name = "Restoration", Sta = 0.3, Int = 0.9, Spi = 0.3, SP = 1.0, Heal = 1.0, Crit = 6, Armor = 0.01, DPS = 0.1 },
         } },
         DRUID = { default = 2, trees = {

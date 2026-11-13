@@ -9,6 +9,8 @@
 --
 -- Changelog
 -- ---------
+-- v0.1.5: E28: "(train Staves)" when the alt has not trained the weapon
+--   type (resolver field needTraining).
 -- v0.1.4: Under each item the compact stat line ("+6.2 damage per
 --   second   +1 Spell Power"; Kit.StatChangeLines, the same as in item
 --   tooltips; ResolverUpgrade 0.13.3 hands the rows over). Rows grow per
@@ -39,7 +41,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_UI_ALTMAIL = "0.1.4"
+LOF.VERSION_UI_ALTMAIL = "0.1.5"
 
 local UI = LOF.UI
 local Resolver = LOF.Resolver
@@ -118,6 +120,9 @@ local function SubText(item)
     end
     if item.tooLow and item.needLevel then
         parts[#parts + 1] = ORANGE .. "(at level " .. item.needLevel .. ")|r"
+    end
+    if item.needTraining then   -- v0.1.5 (E28)
+        parts[#parts + 1] = ORANGE .. "(train " .. item.needTraining .. ")|r"
     end
     return GREY .. table.concat(parts, "  ") .. "|r"
 end

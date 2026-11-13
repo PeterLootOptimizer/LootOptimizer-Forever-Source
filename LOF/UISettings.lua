@@ -8,6 +8,13 @@
 --
 -- Changelog
 -- ---------
+-- v0.4.2: audit 1.6.8: SetOptionShown (one place to show/hide an option;
+--   was copied for the new option); setting text matches the behaviour.
+-- v0.4.1: Values > Disenchant: "Show disenchant details in tooltips"
+--   (Yivry, CurseForge 13 Nov; Resolver.Value.Is/SetDisenchantDetailsShown).
+-- v0.4.0: F17: Upgrade Advisor > "Show an 'Upgrade available' button
+--   instead of the popup" (Resolver.Upgrade.Is/SetButtonMode; account
+--   wide). The click goes to Capture.OnUpgradeButtonModeChanged.
 -- v0.3.2: General > Bags: "Show the 'Not worth a swap' popup"
 --   (Resolver.IsNotWorthPopupEnabled / Set; Peter, 17 Oct).
 -- v0.3.1: Kit helpers (UI 1.17.0): ClassColored and the Remove from LOF
@@ -54,7 +61,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_UI_SETTINGS = "0.3.2"
+LOF.VERSION_UI_SETTINGS = "0.4.2"
 
 local UI = LOF.UI
 local Resolver = LOF.Resolver
@@ -130,6 +137,14 @@ local function Option(parent, label, onClick, onEnter)
         if button == "LeftButton" and o.check:IsEnabled() then o.check:Click() end
     end)
     return o
+end
+
+-- v0.4.2: shows or hides all parts of an option (audit 1.6.8: one place).
+local function SetOptionShown(o, shown)
+    o.check:SetShown(shown)
+    o.label:SetShown(shown)
+    o.desc:SetShown(shown)
+    o.hover:SetShown(shown)
 end
 
 local function SetOptionEnabled(o, enabled)
@@ -226,6 +241,12 @@ local function BuildValues(p)
         Resolver.Value.SetDisenchantEnabled(on)
         LOF.RequestRefresh()
     end, function(self) UI.ShowDisenchantHelp(self) end)
+    v.deDetails = Option(p, "Show disenchant details in tooltips", function(on)   -- v0.4.1
+        Resolver.Value.SetDisenchantDetailsShown(on)
+        LOF.RequestRefresh()
+    end)
+    v.deDetails.desc:SetText("Off: no materials or other disenchant lines in tooltips, only the value "
+        .. "LOF uses for an item in your bags. Useful when another addon shows disenchant info.")   -- v0.4.2
     return v
 end
 
@@ -299,10 +320,8 @@ local function RenderValues(v, p)
     -- Disenchant: only when one of your characters has Enchanting
     local deShown = snap.deAvailable == true
     v.deHead:SetShown(deShown)
-    v.de.check:SetShown(deShown)
-    v.de.label:SetShown(deShown)
-    v.de.desc:SetShown(deShown)
-    v.de.hover:SetShown(deShown)
+    SetOptionShown(v.de, deShown)          -- v0.4.2
+    SetOptionShown(v.deDetails, deShown)   -- v0.4.1
     if deShown then
         v.deHead:ClearAllPoints()
         v.deHead:SetPoint("TOPLEFT", p, "TOPLEFT", 4, y)
@@ -314,6 +333,9 @@ local function RenderValues(v, p)
         if not active then text = text .. "\n" .. RED .. "Needs Auctionator prices (above).|r" end
         v.de.desc:SetText(text)
         y = PlaceOption(v.de, p, y)
+        v.deDetails.check:SetChecked(snap.deDetails)   -- v0.4.1
+        SetOptionEnabled(v.deDetails, snap.deActive)
+        y = PlaceOption(v.deDetails, p, y)
     end
     return -y
 end
@@ -340,6 +362,16 @@ local function BuildAdvisor(p)
         "When you open a mailbox and your bags hold upgrades for your alts, "
             .. "the Send to alts window opens next to the mail.",
         "Recent Loot > Upgrade opens it any time."))
+    -- v0.4.0 (F17)
+    a.button = Option(p, "Show an \"Upgrade available\" button", function(on)
+        Resolver.Upgrade.SetButtonMode(on)
+        LOF.Capture.OnUpgradeButtonModeChanged()
+        LOF.RequestRefresh()
+    end, SimpleTooltip("Upgrade available button",
+        "On: when LOF finds an upgrade for you or one of your alts, a small button appears below the "
+            .. "minimap. Click it when it suits you to see the comparison. You can drag the button anywhere.\n"
+            .. "Off: the upgrade popup opens right away (after combat).",
+        "Clicking Scan always opens the popup right away. Applies to all your characters."))
     return a
 end
 
@@ -415,6 +447,10 @@ local function RenderAdvisor(a, p)
     a.mail.check:SetChecked(snap.mailAutoOpen)
     a.mail.desc:SetText("Opens next to the mail when your bags hold upgrades for your alts.")
     y = PlaceOption(a.mail, p, y)
+
+    a.button.check:SetChecked(snap.buttonMode)   -- v0.4.0 (F17)
+    a.button.desc:SetText("Instead of the popup: upgrades wait behind a small button below the minimap. All your characters.")
+    y = PlaceOption(a.button, p, y)
     return -y
 end
 

@@ -7,6 +7,12 @@
 --
 -- Changelog
 -- ---------
+-- v0.3.6: E28: weaponSkills: weapon subclass -> the skill spell that
+--   teaches it (IsPlayerSpell, measured on Forever 11 Nov: maces 198 known,
+--   staves 227 not yet) and the skill's English name for "(train Staves)".
+-- v0.3.5: E24: futureUpgradeLevels = 5: an upgrade for a later level
+--   (level requirement, or an armor / weapon type from a level) only
+--   counts within this many levels.
 -- v0.3.4: E20: statLabels for damage of one school ("Shadow Damage"
 --   ...), so the comparison table never shows a stat key.
 -- v0.3.3: E21: weapons.excludedSubclasses (fishing pole) removed; the
@@ -37,7 +43,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_DATA_STATPROFILES = "0.3.4"
+LOF.VERSION_DATA_STATPROFILES = "0.3.6"
 
 LOF.Data = LOF.Data or {}
 
@@ -60,6 +66,31 @@ LOF.Data.StatProfiles = {
         PALADIN = { mainStat = nil, note = "depends on spec" },
         SHAMAN  = { mainStat = nil, note = "depends on spec" },
         DRUID   = { mainStat = nil, note = "depends on spec" },
+    },
+
+    -- v0.3.5 (E24): an upgrade for a later level counts only this many
+    -- levels ahead (e.g. 5: a level-40 item from level 35).
+    futureUpgradeLevels = 5,
+
+    -- v0.3.6 (E28): weapon subclass -> skill spell + name (Classic IDs).
+    -- Subclasses without an entry (Miscellaneous, Fishing Pole) need no
+    -- training.
+    weaponSkills = {
+        [0]  = { spell = 196,   name = "One-Handed Axes" },
+        [1]  = { spell = 197,   name = "Two-Handed Axes" },
+        [2]  = { spell = 264,   name = "Bows" },
+        [3]  = { spell = 266,   name = "Guns" },
+        [4]  = { spell = 198,   name = "One-Handed Maces" },
+        [5]  = { spell = 199,   name = "Two-Handed Maces" },
+        [6]  = { spell = 200,   name = "Polearms" },
+        [7]  = { spell = 201,   name = "One-Handed Swords" },
+        [8]  = { spell = 202,   name = "Two-Handed Swords" },
+        [10] = { spell = 227,   name = "Staves" },
+        [13] = { spell = 15590, name = "Fist Weapons" },
+        [15] = { spell = 1180,  name = "Daggers" },
+        [16] = { spell = 2567,  name = "Thrown" },
+        [18] = { spell = 5011,  name = "Crossbows" },
+        [19] = { spell = 5009,  name = "Wands" },
     },
 
     -- Weapons (v0.2.0)

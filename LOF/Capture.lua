@@ -6,6 +6,40 @@
 --
 -- Changelog
 -- ---------
+-- v1.10.6: audit 1.6.8 (Peter, 10 Nov):
+--   - A waiting upgrade only leaves the queue when its item left the bags
+--     (fishing or loading item data made everything "not worth it" and
+--     wiped the button).
+--   - Combat during an open popup puts that same queue entry back (with
+--     asked / bag slot): it reopens after combat, and an ALT UPGRADE
+--     keeps its "once" rule.
+--   - A click on the button while a popup cannot open (swap, loot window)
+--     does nothing instead of losing the item.
+-- v1.10.5: F17 (Peter, 10 Nov): an ALT UPGRADE is shown once on the
+--   button: OK (Cancel) on its popup takes it off, it does not go back
+--   in the queue. Scan and Send to alts at the mailbox still show it.
+-- v1.10.4: F17 (Peter's test, 9 Nov): the selection is the queue entry
+--   itself (two identical items share a link: > got stuck); the state for
+--   the window also carries the position (2 of 3).
+-- v1.10.3: F17 (Peter, 9 Nov): the button shows the selected waiting
+--   item (icon) with < and > to browse (Capture.StepUpgradeButton); a
+--   click opens that item. After Cancel the selection moves to the next
+--   item. Order and list from Upgrade.GetWaitingList (resolver).
+-- v1.10.2: F17: the button opens the waiting upgrade the resolver picks
+--   (Upgrade.PickFirstWaiting: your own first, largest gain first).
+-- v1.10.1: F17 (Peter's test, 9 Nov): with the button on, Cancel (and OK
+--   on an ALT UPGRADE) puts the item at the back of the queue: the count
+--   stays, the next click shows the next item. Only Equip, Ignore or the
+--   item leaving the bags lowers the count.
+-- v1.10.0: F17 (Peter, 9 Nov): "Upgrade available" button. A queued
+--   upgrade remembers whether the player asked for it (asked: Scan
+--   button, or a click on the button). With the setting on, only asked
+--   items open as a popup right away; the others wait and the button
+--   shows how many (Capture.RefreshUpgradeButton -> UI.SetUpgradeButton;
+--   the resolver's Upgrade.GetPromptVerdict decides which still count).
+--   Capture.OpenNextUpgrade() is the button's click. The button hides in
+--   combat and while a popup is open. Turning the setting off shows the
+--   waiting items as popups (Capture.OnUpgradeButtonModeChanged).
 -- v1.9.13: E10 fix. QUEST_COMPLETE tells the resolver the reward window
 --   is open (Resolver.QuestRewardShown); QUEST_FINISHED already clears it.
 -- v1.9.12: E7 probe removed (Peter's test: free API, empty slots and
@@ -283,7 +317,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_CAPTURE = "1.9.13"
+LOF.VERSION_CAPTURE = "1.10.6"
 
 local Capture = {}
 LOF.Capture = Capture
@@ -890,6 +924,7 @@ end
 local Upgrade = Resolver.Upgrade
 local upgradeQueue = {}
 local currentUpgrade = nil
+local currentEntry = nil   -- v1.10.6: the queue entry behind the open popup
 local pendingEquip = nil
 local processScheduled = false
 local EQUIP_CHECK_DELAY = 2
@@ -901,25 +936,80 @@ local function CanShowUpgrade()
     return true
 end
 
+-- v1.10.0 (F17): the button shows how many queued upgrades wait (not
+-- in combat, not while a popup is open). Items that no longer count are
+-- dropped from the queue, as the popup flow drops them.
+local selectedUpgrade = nil   -- v1.10.4: the queue entry the button shows
+
+-- v1.10.3: the waiting list (resolver order) and the selected position
+local function WaitingSelection()
+    local list = Upgrade.GetWaitingList(upgradeQueue)
+    local sel = 1
+    for i, w in ipairs(list) do
+        if w.entry == selectedUpgrade then sel = i break end
+    end
+    return list, sel
+end
+
+function Capture.RefreshUpgradeButton()
+    if not LOF.UI.SetUpgradeButton then return end
+    local state = nil
+    if Upgrade.IsEnabled() and Upgrade.IsButtonMode() and not currentUpgrade and not pendingEquip
+        and not InCombatLockdown() and not UnitAffectingCombat("player") then
+        local list, sel = WaitingSelection()
+        local counts = {}
+        for _, w in ipairs(list) do counts[w.entry] = true end
+        -- v1.10.6: drop an entry only when its item left the bags
+        -- DEBT(dup): queue rules decided in Capture, belong in the resolver (O41)
+        local keep = {}
+        for _, e in ipairs(upgradeQueue) do
+            if e.asked or counts[e] or e.bag then keep[#keep + 1] = e end
+        end
+        upgradeQueue = keep
+        if #list > 0 then
+            selectedUpgrade = list[sel].entry
+            state = { count = #list, index = sel, item = list[sel] }
+        end
+    end
+    LOF.UI.SetUpgradeButton(state)
+end
+
+-- v1.10.3: < and > on the button (delta -1 / 1), round
+function Capture.StepUpgradeButton(delta)
+    local list, sel = WaitingSelection()
+    if #list == 0 then return end
+    sel = ((sel - 1 + (delta or 1)) % #list) + 1
+    selectedUpgrade = list[sel].entry
+    Capture.RefreshUpgradeButton()
+end
+
 function Capture.ProcessUpgradeQueue()
     processScheduled = false
     if not Upgrade.IsEnabled() then
         upgradeQueue = {}
+        Capture.RefreshUpgradeButton()
         return
     end
-    while #upgradeQueue > 0 and CanShowUpgrade() do
-        local entry = table.remove(upgradeQueue, 1)
-        local bag, slot = Upgrade.FindInBags(entry.link, entry.itemID)
-        if bag then
-            local verdict = Upgrade.Evaluate(bag, slot)
-            if Upgrade.ShouldPrompt(verdict, entry.force) then
+    local buttonMode = Upgrade.IsButtonMode()   -- v1.10.0 (F17)
+    local i = 1
+    while i <= #upgradeQueue and CanShowUpgrade() do
+        local entry = upgradeQueue[i]
+        if buttonMode and not entry.asked then
+            i = i + 1   -- waits for the button
+        else
+            table.remove(upgradeQueue, i)
+            local verdict = Upgrade.GetPromptVerdict(entry)
+            if verdict then
                 currentUpgrade = verdict
+                currentEntry = entry   -- v1.10.6
                 Upgrade.MarkAdvised(verdict.itemID)   -- v1.7.4
                 LOF.UI.ShowUpgradePopup(verdict)
+                Capture.RefreshUpgradeButton()
                 return
             end
         end
     end
+    Capture.RefreshUpgradeButton()
 end
 
 local function ScheduleUpgradeProcessing(delay)
@@ -978,6 +1068,7 @@ local function RunGearDiff()
         end
     end
     gearSnapshot = current
+    if #upgradeQueue > 0 then Capture.RefreshUpgradeButton() end   -- v1.10.0 (F17): item gone?
 end
 
 -- Small delay so PLAYER_EQUIPMENT_CHANGED is processed first.
@@ -1009,11 +1100,17 @@ function Capture.ScanBagsForUpgrades(mode)
                     if Upgrade.ShouldPrompt(v, true) and not (mode == "silent" and v.popupKind == "ALT") then
                         prompts = prompts + 1
                         local queued = false
+                        local asked = (mode == "button") or nil   -- v1.10.0 (F17)
                         for _, e in ipairs(upgradeQueue) do
-                            if e.link == v.link then e.force = true queued = true break end
+                            if e.link == v.link then
+                                e.force = true
+                                e.asked = e.asked or asked
+                                queued = true
+                                break
+                            end
                         end
                         if not queued then
-                            upgradeQueue[#upgradeQueue + 1] = { link = v.link, itemID = v.itemID, force = true }
+                            upgradeQueue[#upgradeQueue + 1] = { link = v.link, itemID = v.itemID, force = true, asked = asked }
                         end
                     end
                 end
@@ -1028,8 +1125,30 @@ end
 
 local function FinishUpgrade()
     currentUpgrade = nil
+    currentEntry = nil   -- v1.10.6
     LOF.UI.HideUpgradePopup()
     ScheduleUpgradeProcessing(0.3)
+end
+
+-- v1.10.0 (F17): click on "Upgrade available": the first waiting upgrade
+-- becomes "asked" and opens as the normal popup.
+function Capture.OpenNextUpgrade()
+    if not CanShowUpgrade() then return end   -- v1.10.6: swap / loot open: keep it
+    local list, sel = WaitingSelection()   -- v1.10.3: the selected item
+    local w = list[sel]
+    if w then
+        for i, e in ipairs(upgradeQueue) do
+            if e == w.entry then table.remove(upgradeQueue, i) break end
+        end
+        w.entry.asked = true
+        table.insert(upgradeQueue, 1, w.entry)
+    end
+    Capture.ProcessUpgradeQueue()
+end
+
+-- v1.10.0 (F17): the setting changed (Settings window).
+function Capture.OnUpgradeButtonModeChanged()
+    ScheduleUpgradeProcessing(0.2)
 end
 
 -- Called from the Equip button OnClick (hardware event).
@@ -1080,16 +1199,42 @@ end
 function Capture.ParkUpgradeForCombat()
     local v = currentUpgrade
     if not v then return end
-    currentUpgrade = nil
+    local entry = currentEntry
+    currentUpgrade, currentEntry = nil, nil
     LOF.UI.HideUpgradePopup()
     if v.link then
-        table.insert(upgradeQueue, 1, { link = v.link, itemID = v.itemID, force = true })
+        -- v1.10.6: the same entry (asked, bag slot), so it reopens after combat
+        entry = entry or { link = v.link, itemID = v.itemID }
+        entry.force = true
+        table.insert(upgradeQueue, 1, entry)
     end
 end
 
 -- Cancel: close without ignoring; the item stays in the bag and can be
 -- suggested again (next loot of it, or /lof upgrade scan).
 function Capture.CancelUpgrade()
+    -- v1.10.1 (F17): "decide later" keeps it on the button, at the back
+    -- DEBT(dup): "alt once / own to the back" decided in Capture (O41)
+    local v = currentUpgrade
+    if v and v.link and Upgrade.IsButtonMode() and v.popupKind ~= "ALT" then   -- v1.10.5: alt once
+        -- v1.10.4: by bag slot, so an identical copy elsewhere does not count
+        local entry
+        for _, e in ipairs(upgradeQueue) do
+            if e.bag == v.bag and e.slot == v.slot then entry = e break end
+        end
+        if not entry then
+            entry = { link = v.link, itemID = v.itemID, force = true, bag = v.bag, slot = v.slot }
+            upgradeQueue[#upgradeQueue + 1] = entry
+        end
+        -- the button then shows the next item
+        local list = Upgrade.GetWaitingList(upgradeQueue)
+        for i, w in ipairs(list) do
+            if w.entry == entry then
+                selectedUpgrade = list[(i % #list) + 1].entry
+                break
+            end
+        end
+    end
     FinishUpgrade()
 end
 
@@ -1339,6 +1484,7 @@ function Capture.HideForCombat()
     end
     -- v1.7.3: open Upgrade popup -> back in the queue, shown after combat
     if Capture.ParkUpgradeForCombat then Capture.ParkUpgradeForCombat() end
+    Capture.RefreshUpgradeButton()   -- v1.10.0 (F17): hidden in combat
 end
 
 function Capture.RestoreAfterCombat()

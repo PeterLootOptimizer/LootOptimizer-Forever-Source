@@ -8,6 +8,11 @@
 --
 -- Changelog
 -- ---------
+-- v0.9.7: E28: Gear for alts adds "train Staves" when the alt has not
+--   trained the weapon type (resolver field needTraining).
+-- v0.9.6: Gear for alts shows full character names ("Baby Jesus", was
+--   "Baby"): players have alts with the same first name (Tim, 11 Nov).
+--   FirstName is gone.
 -- v0.9.5: ORANGE comes from the Kit (one constant).
 -- v0.9.4: Gear for alts: under "Upgrade for" the full comparison of the
 --   selected item for its top character (Peter: only "+3.5%" before):
@@ -116,7 +121,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_UI_HOLDINGS = "0.9.5"
+LOF.VERSION_UI_HOLDINGS = "0.9.7"
 
 local UI = LOF.UI
 local Resolver = LOF.Resolver
@@ -974,10 +979,6 @@ end
 -- -------------------------------------------------------------
 -- v0.7.0: Gear for alts (texts only; the resolver decided)
 -- -------------------------------------------------------------
-local function FirstName(name)
-    return (tostring(name):match("^(%S+)")) or tostring(name)
-end
-
 local function GainText(t)   -- v0.9.3: Kit.GainText
     return Kit.GainText(t, GREEN, "upgrade")
 end
@@ -998,14 +999,14 @@ local function RenderGearList(snap)
         local h = data.holders[1]
         local label = LOF.ColorizeName(data.name, data.quality)
         if h then
-            label = label .. GREY .. "  (" .. FirstName(h.name)
+            label = label .. GREY .. "  (" .. tostring(h.name)
                 .. (#data.holders > 1 and (" +" .. (#data.holders - 1)) or "") .. ")|r"
         end
         row.name:SetText(label)
         row.source:SetText("")
         row.loc:SetText(h and (#data.holders > 1 and "Multi" or (LOCATION_LABEL[h.location] or "")) or "")
         local t = data.shown
-        local who = ClassColored(FirstName(t.name), t.class) .. " " .. GainText(t)
+        local who = ClassColored(tostring(t.name), t.class) .. " " .. GainText(t)
         if #data.targets > 1 and snap.isAll then who = who .. GREY .. " +" .. (#data.targets - 1) .. "|r" end
         row.value:SetText(who)
         row.sel:SetShown(gear.selected ~= nil and gear.selected.key == data.key)
@@ -1098,6 +1099,7 @@ local function RenderGearAnalysis(snap)
         local g = GetGearTarget(i)
         local line = ClassColored(t.name, t.class) .. "  " .. GainText(t)
         if t.tooLow then line = line .. GOLD .. "  at level " .. tostring(t.needLevel) .. "|r" end
+        if t.needTraining then line = line .. GOLD .. "  train " .. tostring(t.needTraining) .. "|r" end   -- v0.9.7
         if t.isHolder then line = line .. GREY .. "  (holds it)|r" end
         g.main:ClearAllPoints()
         g.main:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, i == 1 and -6 or -8)

@@ -8,6 +8,24 @@
 --
 -- Changelog
 -- ---------
+-- v0.11.6: audit 1.6.8 (final): weaponSkills is only stored when the scan
+--   found at least one trained weapon type (an early scan that sees none
+--   would mark every weapon "train"); the trained types are part of the
+--   gear signature (swap protection refreshes after training); in Gear for
+--   alts an alt that still has to train sorts after one that can use it.
+-- v0.11.5: E28 (Tim, 11 Nov): ScanCharacter stores weaponSkills, the
+--   weapon types the character has trained ({ [subclass] = true },
+--   IsPlayerSpell with StatProfiles.weaponSkills); GetGearProfiles passes
+--   it on. Without IsPlayerSpell nothing is stored (old class rule).
+-- v0.11.4: audit 1.6.8: realWeapons only stores a real weapon in the main
+--   hand (not empty, not a pole). Unarmed and then the pole used to store
+--   "no weapon", so every weapon looked like an upgrade again.
+-- v0.11.3: E23 (Peter, 9 Nov): ScanCharacter also stores realWeapons,
+--   the main hand / off-hand held without a fishing pole (kept while a
+--   pole is held; equipSlots still shows what is really held).
+--   GetGearProfiles passes realWeapons on; Holdings.GetRealWeapons() for
+--   the current character and Holdings.CharHasInBags(name, link) for the
+--   "is it still in the bags" check (stored bag of that character).
 -- v0.11.2: E4 fix (ResolverUpgrade 0.13.4): RequestItem is exported as
 --   Holdings.RequestItem for ResolverUpgrade (alt gear not loaded yet),
 --   and the gear-for-alts cache key includes Upgrade.GetDataEpoch(), so a
@@ -189,7 +207,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_RESOLVER_HOLDINGS = "0.11.2"
+LOF.VERSION_RESOLVER_HOLDINGS = "0.11.6"
 
 local Resolver = LOF.Resolver
 local Holdings = {}
@@ -242,6 +260,11 @@ local function GearSignature(node)
     for _, t in ipairs(node.talents or {}) do
         parts[#parts + 1] = tostring(t.points)
     end
+    -- v0.11.6: trained weapon types (E28)
+    local skills = {}
+    for subclass in pairs(node.weaponSkills or {}) do skills[#skills + 1] = subclass end
+    table.sort(skills)
+    parts[#parts + 1] = table.concat(skills, ",")
     return table.concat(parts, "|")
 end
 
@@ -499,6 +522,21 @@ function Holdings.ScanCharacter()
     local equipped, slotLinks = ReadEquipped()
     node.loc.equipped = equipped
     node.equipSlots = slotLinks
+    -- v0.11.3 (E23): the weapons held without a fishing pole
+    local Up = Resolver.Upgrade
+    local main = slotLinks and slotLinks[16]
+    if main and not (Up and Up.IsFishingPoleLink and Up.IsFishingPoleLink(main)) then   -- v0.11.4
+        node.realWeapons = { [16] = main, [17] = slotLinks and slotLinks[17] }
+    end
+    -- v0.11.5 (E28): trained weapon types
+    local skills = LOF.Data and LOF.Data.StatProfiles and LOF.Data.StatProfiles.weaponSkills
+    if type(skills) == "table" and _G.IsPlayerSpell then
+        local known = {}
+        for subclass, s in pairs(skills) do
+            if _G.IsPlayerSpell(s.spell) then known[subclass] = true end
+        end
+        if next(known) ~= nil then node.weaponSkills = known end   -- v0.11.6
+    end
     node.updated.equipped = time()
     -- v0.7.0: talents + dual wield, for alt upgrades
     local Upgrade = Resolver.Upgrade
@@ -654,6 +692,23 @@ end
 -- v0.7.0: the other characters in the scope whose equipped gear is
 -- known, for alt upgrades (Resolver.Upgrade). Read-only copies of the
 -- stored data; nothing is calculated here.
+-- v0.11.3 (E23): weapons last held without a fishing pole (current
+-- character), or nil when never seen.
+function Holdings.GetRealWeapons()
+    local node = GetCurrentNode()
+    return node and node.realWeapons or nil
+end
+
+-- v0.11.3 (E23): the stored bag link of this item for a character, or
+-- nil when it is not in that character's stored bags.
+function Holdings.CharHasInBags(name, link)
+    local scope = GetScope(Holdings.GetScopeKey())
+    local node = scope and name and scope.chars[name]
+    local bag = node and node.loc and node.loc.bag
+    local e = bag and GroupKey(link) and bag[GroupKey(link)]
+    return e and (e.l or link) or nil
+end
+
 function Holdings.GetGearProfiles(includeCurrent)
     local scope = GetScope(Holdings.GetScopeKey())
     local current = GetPlayerName()
@@ -665,6 +720,8 @@ function Holdings.GetGearProfiles(includeCurrent)
                 name = name, class = node.class, className = node.className,
                 level = tonumber(node.level) or 1,
                 equipSlots = node.equipSlots,      -- nil before v0.7.0
+                realWeapons = node.realWeapons,    -- v0.11.3 (E23), nil before
+                weaponSkills = node.weaponSkills,  -- v0.11.5 (E28), nil before
                 equipped = node.loc.equipped,
                 talents = node.talents,
                 dualWield = node.dualWield,
@@ -765,6 +822,7 @@ end
 
 local function TargetBefore(a, b)
     if a.tooLow ~= b.tooLow then return not a.tooLow end
+    if (a.needTraining ~= nil) ~= (b.needTraining ~= nil) then return a.needTraining == nil end   -- v0.11.6
     if a.emptySlot ~= b.emptySlot then return a.emptySlot end
     local pa, pb = a.percent or 0, b.percent or 0
     if pa ~= pb then return pa > pb end
@@ -816,6 +874,7 @@ local function BuildGearView(scope, current, character, location, selectedKey)
         if a.shown ~= b.shown then
             local x, y = a.shown, b.shown
             if x.tooLow ~= y.tooLow or x.emptySlot ~= y.emptySlot
+                or (x.needTraining ~= nil) ~= (y.needTraining ~= nil)   -- v0.11.6
                 or (x.percent or 0) ~= (y.percent or 0) then
                 return TargetBefore(x, y)
             end

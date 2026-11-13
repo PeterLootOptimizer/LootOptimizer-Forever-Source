@@ -8,6 +8,10 @@
 --
 -- Changelog
 -- ---------
+-- v0.2.1: Yivry (CurseForge, 13 Nov): setting "Show disenchant details
+--   in tooltips" (showDisenchantDetails, default on). Off: info.de.details
+--   is false; the tooltip shows only the value LOF uses. Values, Swap,
+--   Make room and protection are not affected.
 -- v0.2.0: Disenchant value (LOF 1.5.0, Peter). Value = the highest of
 --   vendor (V), AH and the expected disenchant yield (DE). DE counts
 --   only when ALL of these hold:
@@ -53,7 +57,7 @@
 -- =============================================================
 
 local LOF = LOF
-LOF.VERSION_RESOLVER_VALUE = "0.2.0"
+LOF.VERSION_RESOLVER_VALUE = "0.2.1"
 
 local Value = {}
 LOF.Resolver.Value = Value
@@ -189,6 +193,17 @@ end
 
 function Value.SetDisenchantEnabled(enabled)
     Settings().useDisenchant = enabled and true or false
+    Value.Invalidate()
+end
+
+-- v0.2.1: disenchant details (materials, "Disenchant on") in tooltips.
+-- Default on; nil counts as on.
+function Value.IsDisenchantDetailsShown()
+    return Settings().showDisenchantDetails ~= false
+end
+
+function Value.SetDisenchantDetailsShown(shown)
+    Settings().showDisenchantDetails = shown and true or false
     Value.Invalidate()
 end
 
@@ -345,6 +360,7 @@ local function BuildDisenchant(info)
     return {
         each = each, stack = each * count, outcomes = list,
         by = by, byCurrent = ench.current,
+        details = Value.IsDisenchantDetailsShown(),   -- v0.2.1
     }
 end
 
@@ -449,6 +465,7 @@ function Value.GetSettingsSnapshot()
         -- v0.2.0: disenchant value
         deAvailable       = GetEnchanterState().any,
         deEnabled         = Value.IsDisenchantEnabled(),
+        deDetails         = Value.IsDisenchantDetailsShown(),   -- v0.2.1
         deActive          = Value.IsDisenchantActive(),
         deCurrent         = GetEnchanterState().current,
         deEnchanters      = GetEnchanterState().names,
